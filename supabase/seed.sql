@@ -1,0 +1,2 @@
+-- No initial seed data needed.
+-- Welcome channel and bot user will be handled at the application level. 
