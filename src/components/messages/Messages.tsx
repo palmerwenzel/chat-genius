@@ -63,10 +63,12 @@ export async function Messages({ channelId }: MessagesProps) {
   }
 
   return (
-    <div className="flex-1 p-4 space-y-6">
-      {messages.map((message: MessageType) => (
-        <Message key={message.id} message={message} />
-      ))}
+    <div className="flex-1 p-4 flex flex-col justify-end min-h-full">
+      <div className="space-y-6">
+        {messages.map((message: MessageType) => (
+          <Message key={message.id} message={message} />
+        ))}
+      </div>
     </div>
   );
 } 

@@ -115,8 +115,10 @@ export function ChatInterface({
         )}
       </div>
 
-      <ScrollArea className="flex-1">
-        {children}
+      <ScrollArea className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col justify-end">
+          {children}
+        </div>
       </ScrollArea>
 
       <div className="p-4 border-t mt-auto">

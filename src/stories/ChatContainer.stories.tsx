@@ -1,64 +1,35 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { ChatContainer } from '@/components/chat/ChatContainer';
+import { ChatInterface } from '@/components/chat/ChatInterface';
 
-const meta: Meta<typeof ChatContainer> = {
-  title: 'Chat/ChatContainer',
-  component: ChatContainer,
+const meta: Meta<typeof ChatInterface> = {
+  title: 'Chat/ChatInterface',
+  component: ChatInterface,
   parameters: {
-    layout: 'fullscreen',
+    layout: 'centered',
   },
-  decorators: [
-    (Story) => (
-      <div className="h-[600px] flex flex-col bg-background">
-        <Story />
-      </div>
-    ),
-  ],
+  args: {
+    title: 'Example Channel',
+    subtitle: 'A place to chat',
+    channelId: '123',
+    children: <div className="p-4">Message content goes here</div>
+  },
 };
 
 export default meta;
-type Story = StoryObj<typeof ChatContainer>;
+type Story = StoryObj<typeof ChatInterface>;
 
-const sampleMessages = [
-  {
-    id: '1',
-    content: 'Hello! Welcome to ChatGenius.',
-    sender: {
-      id: 'user1',
-      name: 'Alice',
-      avatar: 'https://github.com/shadcn.png',
-    },
-    timestamp: '10:00 AM',
-  },
-  {
-    id: '2',
-    content: 'Thanks! This is a great chat app.',
-    sender: {
-      id: 'user2',
-      name: 'Bob',
-      avatar: 'https://github.com/radix-ui.png',
-    },
-    timestamp: '10:01 AM',
-  },
-  {
-    id: '3',
-    content: 'I love the clean interface!',
-    sender: {
-      id: 'user3',
-      name: 'Carol',
-    },
-    timestamp: '10:02 AM',
-  },
-];
+export const Default: Story = {};
 
-export const WithMessages: Story = {
+export const Loading: Story = {
   args: {
-    messages: sampleMessages,
+    isLoading: true,
   },
 };
 
-export const Empty: Story = {
+export const NoChannel: Story = {
   args: {
-    messages: [],
+    channelId: '',
+    title: 'Select a Channel',
+    subtitle: 'Choose a channel to start chatting',
   },
 }; 
