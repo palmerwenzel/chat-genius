@@ -7,16 +7,6 @@ import { createServerSupabase } from "@/lib/server-supabase";
 import { notFound, redirect } from "next/navigation";
 import { ChatProvider } from "@/contexts/chat";
 
-export interface PageProps {
-  params: {
-    groupId: string;
-    channelId: string;
-  };
-  searchParams?: {
-    message?: string;
-  };
-}
-
 export default async function ChannelPage({ params, searchParams = {} }: {
   params: {
     groupId: string;
