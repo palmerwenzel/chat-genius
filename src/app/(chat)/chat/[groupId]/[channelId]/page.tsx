@@ -17,7 +17,15 @@ export interface PageProps {
   };
 }
 
-export default async function ChannelPage({ params, searchParams = {} }: PageProps) {
+export default async function ChannelPage({ params, searchParams = {} }: {
+  params: {
+    groupId: string;
+    channelId: string;
+  };
+  searchParams?: {
+    message?: string;
+  };
+}) {
   const supabase = await createServerSupabase();
 
   // Verify auth status
