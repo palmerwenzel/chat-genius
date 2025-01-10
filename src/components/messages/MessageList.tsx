@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 import { useRouter } from 'next/navigation';
+
+const supabase = createClientComponentClient<Database>();
 
 interface MessageListProps {
   channelId: string;

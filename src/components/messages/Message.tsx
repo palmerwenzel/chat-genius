@@ -10,9 +10,11 @@ import { Reply } from 'lucide-react';
 import { Database } from '@/types/supabase';
 import { useAuth } from '@/stores/auth';
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useChatContext } from '@/contexts/chat';
 import { MessageInput } from '@/components/messages/MessageInput';
+
+const supabase = createClientComponentClient<Database>();
 
 type MessageType = Database['public']['Tables']['messages']['Row'] & {
   sender: {

@@ -1,4 +1,7 @@
-import { supabase } from '@/lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/types/supabase';
+
+const supabase = createClientComponentClient<Database>();
 
 // Rate limits per minute
 const RATE_LIMITS = {

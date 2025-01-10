@@ -6,7 +6,8 @@ import { MessageInput } from "@/components/messages/MessageInput";
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/stores/auth';
 import { useChatContext } from '@/contexts/chat';
-import { supabase } from '@/lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 import { storageService } from '@/services/storage';
 
 interface ChatInterfaceProps {
@@ -16,6 +17,8 @@ interface ChatInterfaceProps {
   isLoading?: boolean;
   children: React.ReactNode;
 }
+
+const supabase = createClientComponentClient<Database>();
 
 export function ChatInterface({
   title,

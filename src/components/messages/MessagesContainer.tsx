@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { Messages } from './Messages';
-import { supabase } from '@/lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/types/supabase';
+
+const supabase = createClientComponentClient<Database>();
 
 type MessageType = Database['public']['Tables']['messages']['Row'] & {
   sender: {

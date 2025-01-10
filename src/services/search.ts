@@ -1,5 +1,7 @@
-import { supabase } from '@/lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/types/supabase';
+
+const supabase = createClientComponentClient<Database>();
 
 export type Message = Database['public']['Tables']['messages']['Row'];
 export type Channel = Database['public']['Tables']['channels']['Row'];

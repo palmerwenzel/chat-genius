@@ -9,9 +9,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { CreateChannelModal } from '@/components/channels/CreateChannelModal';
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 import { Surface } from "../ui/surface";
 import { SearchButton } from "@/components/search/SearchButton";
+
+const supabase = createClientComponentClient<Database>();
 
 interface Channel {
   id: string;

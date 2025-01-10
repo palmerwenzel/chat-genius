@@ -1,6 +1,8 @@
-import { supabase } from '@/lib/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { realtimeManager } from '@/lib/realtime';
 import { Database } from '@/types/supabase';
+
+const supabase = createClientComponentClient<Database>();
 
 type Channel = Database['public']['Tables']['channels']['Row'];
 type ChannelInsert = Database['public']['Tables']['channels']['Insert'];
