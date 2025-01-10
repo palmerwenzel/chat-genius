@@ -35,20 +35,8 @@ export function MessagesContainer({ channelId, highlightMessageId }: MessagesCon
     const loadMessages = async () => {
       setIsLoading(true);
       try {
-        // First get the channel ID from the channel name
-        const { data: channelData } = await supabase
-          .from('channels')
-          .select('id')
-          .eq('name', channelId)
-          .single();
-
-        if (!mounted) return;
-        if (!channelData) {
-          setChannel(null);
-          return;
-        }
-
-        setChannel(channelData);
+        // Set channel ID directly since we receive it as a prop
+        setChannel({ id: channelId });
 
         // Then get messages for this channel
         const { data: messagesData } = await supabase
@@ -57,7 +45,7 @@ export function MessagesContainer({ channelId, highlightMessageId }: MessagesCon
             *,
             sender:users!messages_sender_id_fkey (*)
           `)
-          .eq('channel_id', channelData.id)
+          .eq('channel_id', channelId)
           .is('thread_id', null)
           .is('deleted_at', null)
           .order('created_at', { ascending: true });

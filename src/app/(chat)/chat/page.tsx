@@ -1,38 +1,41 @@
-import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/server-supabase";
-import { ChatInterface } from "@/components/chat/ChatInterface";
-import { ChatProvider } from "@/contexts/chat";
+import { redirect } from "next/navigation";
 
 export default async function ChatPage() {
   const supabase = await createServerSupabase();
-  
-  // Get the first available channel
-  const { data: firstChannel } = await supabase
-    .from('channels')
-    .select('name')
-    .order('name')
-    .limit(1)
-    .single();
 
-  // If there's a channel available, redirect to it
-  if (firstChannel) {
-    redirect(`/chat/${firstChannel.name}`);
+  // Verify auth status
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) {
+    redirect('/login');
   }
 
-  // If no channels exist, show the welcome screen
+  // Get user's groups
+  const { data: groups } = await supabase
+    .from('groups')
+    .select(`
+      id,
+      name,
+      description,
+      group_members!inner (
+        role
+      )
+    `)
+    .eq('group_members.user_id', session.user.id)
+    .order('name')
+    .limit(1);
+
+  // If user has any groups, redirect to the first one
+  if (groups && groups.length > 0) {
+    redirect(`/chat/${groups[0].name}`);
+  }
+
   return (
-    <ChatProvider>
-      <ChatInterface
-        channelId=""
-        title="Welcome to Chat"
-        subtitle="Select a channel from the sidebar to start chatting, or create a new one"
-      >
-        <div className="flex items-center justify-center h-full">
-          <p className="text-muted-foreground text-center">
-            No channels available. Create a channel to start chatting!
-          </p>
-        </div>
-      </ChatInterface>
-    </ChatProvider>
+    <div className="flex flex-col items-center justify-center h-full text-center p-8">
+      <h1 className="text-2xl font-bold mb-4">Welcome to Chat</h1>
+      <p className="text-muted-foreground mb-8 max-w-lg">
+        You are not a member of any groups yet. Ask for an invitation or create your own group to get started.
+      </p>
+    </div>
   );
 } 

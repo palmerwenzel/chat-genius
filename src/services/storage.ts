@@ -13,6 +13,7 @@ type FileMetadata = {
   mimeType: string;
   filename: string;
   channelId?: string;
+  groupId?: string;
   messageId?: string;
 };
 
@@ -32,31 +33,32 @@ class StorageService {
     userId: string
   ): Promise<string | null> {
     if (!metadata.channelId) throw new Error('Channel ID is required');
+    if (!metadata.groupId) throw new Error('Group ID is required');
     if (!UUID_REGEX.test(metadata.channelId)) throw new Error('Invalid channel ID format');
+    if (!UUID_REGEX.test(metadata.groupId)) throw new Error('Invalid group ID format');
 
-    // Validate channel membership before proceeding
+    // Validate channel and group membership before proceeding
     const { data: membership, error: membershipError } = await this.supabase
       .from('channel_members')
-      .select()
+      .select(`
+        channel_id,
+        channels!inner (
+          group_id
+        )
+      `)
       .eq('channel_id', metadata.channelId)
       .eq('user_id', userId)
+      .eq('channels.group_id', metadata.groupId)
       .single();
-
-    console.log('Channel membership check:', {
-      channelId: metadata.channelId,
-      userId,
-      membership,
-      error: membershipError
-    });
 
     if (membershipError || !membership) {
       console.error('Error checking channel membership:', membershipError);
-      throw new Error('User is not a member of this channel');
+      throw new Error('User is not a member of this channel or group');
     }
 
     // Create a unique file path scoped to channel
     const timestamp = new Date().getTime();
-    const filePath = `${metadata.channelId}/${timestamp}-${metadata.filename}`;
+    const filePath = `${metadata.groupId}/${metadata.channelId}/${timestamp}-${metadata.filename}`;
 
     // First create metadata entry
     const { error: metadataError } = await this.supabase
@@ -68,6 +70,7 @@ class StorageService {
         mime_type: metadata.mimeType,
         original_name: metadata.filename,
         channel_id: metadata.channelId,
+        group_id: metadata.groupId,
         message_id: metadata.messageId,
         uploaded_by: userId
       });
@@ -152,6 +155,7 @@ class StorageService {
       mimeType: data.mime_type,
       filename: data.original_name,
       channelId: data.channel_id,
+      groupId: data.group_id,
       messageId: data.message_id,
     };
   }
@@ -177,6 +181,7 @@ class StorageService {
       mimeType: item.mime_type,
       filename: item.original_name,
       channelId: item.channel_id,
+      groupId: item.group_id,
       messageId: item.message_id,
     }));
   }
@@ -202,6 +207,7 @@ class StorageService {
       mimeType: item.mime_type,
       filename: item.original_name,
       channelId: item.channel_id,
+      groupId: item.group_id,
       messageId: item.message_id,
     }));
   }

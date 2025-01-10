@@ -32,6 +32,7 @@ interface MessageActionsProps {
   onEdit?: () => void;
   channelId: string;
   threadId?: string;
+  senderId: string;
 }
 
 const commonEmojis = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "✨"];
@@ -50,8 +51,36 @@ export function MessageActions({
   onEdit,
   channelId,
   threadId,
+  senderId,
 }: MessageActionsProps) {
   const { user } = useAuth();
+  const [userRole, setUserRole] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!user) return;
+
+    const fetchUserRole = async () => {
+      const { data: memberData } = await supabase
+        .from('channel_members')
+        .select('role')
+        .eq('channel_id', channelId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (memberData) {
+        setUserRole(memberData.role);
+      }
+    };
+
+    fetchUserRole();
+  }, [user, channelId]);
+
+  const canDeleteMessage = React.useMemo(() => {
+    if (!user) return false;
+    if (senderId === user.id) return true;
+    if (userRole === 'owner' || userRole === 'admin') return true;
+    return false;
+  }, [user, senderId, userRole]);
 
   const handleReaction = React.useCallback(async (emoji: string) => {
     if (!user) return;
@@ -154,7 +183,6 @@ export function MessageActions({
                       className="h-6 w-6 hover:bg-muted rounded flex items-center justify-center"
                       onClick={async () => {
                         await handleReaction(emoji);
-                        // Simulate Escape key press to close all menus
                         document.dispatchEvent(
                           new KeyboardEvent('keydown', {
                             key: 'Escape',
@@ -190,23 +218,31 @@ export function MessageActions({
             </ContextMenuItem>
           )}
 
-          <ContextMenuSeparator />
-          
-          <ContextMenuItem 
-            onClick={onEdit}
-            className="cursor-pointer"
-          >
-            <Pencil className="h-4 w-4 mr-2" />
-            Edit Message
-          </ContextMenuItem>
-          
-          <ContextMenuItem 
-            onClick={handleDelete}
-            className="text-red-400 cursor-pointer"
-          >
-            <Trash className="h-4 w-4 mr-2" />
-            Delete Message
-          </ContextMenuItem>
+          {(senderId === user?.id || canDeleteMessage) && (
+            <>
+              <ContextMenuSeparator />
+              
+              {senderId === user?.id && (
+                <ContextMenuItem 
+                  onClick={onEdit}
+                  className="cursor-pointer"
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit Message
+                </ContextMenuItem>
+              )}
+              
+              {canDeleteMessage && (
+                <ContextMenuItem 
+                  onClick={handleDelete}
+                  className="text-red-400 cursor-pointer"
+                >
+                  <Trash className="h-4 w-4 mr-2" />
+                  Delete Message
+                </ContextMenuItem>
+              )}
+            </>
+          )}
         </ContextMenuContent>
       </ContextMenu>
 

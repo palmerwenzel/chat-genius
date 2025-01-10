@@ -12,9 +12,30 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
+-- Create groups table
+CREATE TABLE IF NOT EXISTS groups (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL CHECK (char_length(name) <= 100),
+  description TEXT CHECK (char_length(description) <= 1000),
+  visibility TEXT CHECK (visibility IN ('public', 'private')) DEFAULT 'private',
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Create group_members table
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id UUID REFERENCES groups(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT CHECK (role IN ('owner', 'admin', 'member')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
+
 -- Create channels table
 CREATE TABLE IF NOT EXISTS channels (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   name TEXT NOT NULL CHECK (char_length(name) <= 100),
   description TEXT CHECK (char_length(description) <= 1000),
   type TEXT CHECK (type IN ('text', 'voice')) DEFAULT 'text',
@@ -146,6 +167,8 @@ CREATE TRIGGER enforce_message_reaction_limit
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
 CREATE INDEX IF NOT EXISTS channels_created_by_idx ON channels(created_by);
+CREATE INDEX IF NOT EXISTS channels_group_id_idx ON channels(group_id);
+CREATE INDEX IF NOT EXISTS groups_created_by_idx ON groups(created_by);
 CREATE INDEX IF NOT EXISTS messages_channel_id_idx ON messages(channel_id);
 CREATE INDEX IF NOT EXISTS messages_sender_id_idx ON messages(sender_id);
 CREATE INDEX IF NOT EXISTS messages_replying_to_id_idx ON messages(replying_to_id);
@@ -158,8 +181,11 @@ CREATE INDEX IF NOT EXISTS reactions_user_id_idx ON reactions(user_id);
 CREATE INDEX IF NOT EXISTS messages_search_idx ON messages USING gin(to_tsvector('english'::regconfig, content));
 CREATE INDEX IF NOT EXISTS users_name_trgm_idx ON users USING gin(name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS channels_name_trgm_idx ON channels USING gin(name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS groups_name_trgm_idx ON groups USING gin(name gin_trgm_ops);
 
 -- Enable realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE groups;
+ALTER PUBLICATION supabase_realtime ADD TABLE group_members;
 ALTER PUBLICATION supabase_realtime ADD TABLE channels;
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE channel_members;
@@ -186,19 +212,85 @@ CREATE POLICY "Users can view all profiles" ON users
 CREATE POLICY "Users can update their own profile" ON users
   FOR UPDATE USING (auth.uid() = id);
 
--- Channels policies
-CREATE POLICY "Users can view accessible channels" ON channels
+-- Groups policies
+CREATE POLICY "Users can view accessible groups" ON groups
   FOR SELECT USING (
     visibility = 'public' OR
     EXISTS (
-      SELECT 1 FROM channel_members 
-      WHERE channel_members.channel_id = id 
-      AND channel_members.user_id = auth.uid()
+      SELECT 1 FROM group_members 
+      WHERE group_members.group_id = id 
+      AND group_members.user_id = auth.uid()
     )
   );
 
-CREATE POLICY "Users can create channels" ON channels
+CREATE POLICY "Users can create groups" ON groups
   FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Group owners and admins can update groups" ON groups
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM group_members 
+      WHERE group_members.group_id = id 
+      AND group_members.user_id = auth.uid()
+      AND group_members.role IN ('owner', 'admin')
+    )
+  );
+
+CREATE POLICY "Group owners can delete groups" ON groups
+  FOR DELETE USING (
+    created_by = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM group_members 
+      WHERE group_members.group_id = id 
+      AND group_members.user_id = auth.uid()
+      AND group_members.role = 'owner'
+    )
+  );
+
+-- Group members policies
+CREATE POLICY "Users can view group members of accessible groups" ON group_members
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM groups
+      WHERE groups.id = group_id
+      AND (
+        groups.visibility = 'public'
+        OR EXISTS (
+          SELECT 1 FROM group_members gm
+          WHERE gm.group_id = groups.id
+          AND gm.user_id = auth.uid()
+        )
+      )
+    )
+  );
+
+-- Channels policies
+CREATE POLICY "Users can view accessible channels" ON channels
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM group_members
+      WHERE group_members.group_id = channels.group_id
+      AND group_members.user_id = auth.uid()
+      AND (
+        channels.visibility = 'public'
+        OR EXISTS (
+          SELECT 1 FROM channel_members 
+          WHERE channel_members.channel_id = channels.id 
+          AND channel_members.user_id = auth.uid()
+        )
+      )
+    )
+  );
+
+CREATE POLICY "Group members can create channels" ON channels
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM group_members
+      WHERE group_members.group_id = NEW.group_id
+      AND group_members.user_id = auth.uid()
+      AND group_members.role IN ('owner', 'admin')
+    )
+  );
 
 CREATE POLICY "Channel owners and admins can update channels" ON channels
   FOR UPDATE USING (
@@ -226,7 +318,9 @@ CREATE POLICY "Users can view messages in their channels" ON messages
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM channels
+      JOIN group_members ON channels.group_id = group_members.group_id
       WHERE channels.id = channel_id
+      AND group_members.user_id = auth.uid()
       AND (
         channels.visibility = 'public'
         OR EXISTS (
@@ -249,7 +343,18 @@ CREATE POLICY "Users can create messages in their channels" ON messages
   );
 
 CREATE POLICY "Users can manage their own messages" ON messages
-  FOR ALL USING (sender_id = auth.uid());
+  FOR UPDATE USING (sender_id = auth.uid());
+
+CREATE POLICY "Users can delete messages they own or if they are channel admin" ON messages
+  FOR DELETE USING (
+    sender_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM channel_members 
+      WHERE channel_members.channel_id = messages.channel_id 
+      AND channel_members.user_id = auth.uid()
+      AND channel_members.role IN ('owner', 'admin')
+    )
+  );
 
 -- Reactions policies
 CREATE POLICY "Users can view reactions in their channels" ON reactions
@@ -454,3 +559,94 @@ CREATE POLICY "Users can delete their own files"
       END
     )
   );
+
+-- Create function to add group creator as owner
+CREATE OR REPLACE FUNCTION add_group_creator_as_owner()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Only add owner if created_by is set
+  IF NEW.created_by IS NOT NULL THEN
+    INSERT INTO group_members (group_id, user_id, role)
+    VALUES (NEW.id, NEW.created_by, 'owner')
+    ON CONFLICT (group_id, user_id) DO UPDATE SET role = 'owner';
+  ELSE
+    RAISE EXCEPTION 'created_by must be set when creating a group';
+  END IF;
+  RETURN NEW;
+END;
+$$ language plpgsql security definer;
+
+-- Create trigger to add group creator as owner
+CREATE TRIGGER add_group_creator_as_owner
+  AFTER INSERT ON groups
+  FOR EACH ROW
+  EXECUTE FUNCTION add_group_creator_as_owner();
+
+-- Create function to check group member limit
+CREATE OR REPLACE FUNCTION check_group_member_limit()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (
+    SELECT COUNT(*) 
+    FROM group_members 
+    WHERE group_id = NEW.group_id
+  ) >= 10000 THEN
+    RAISE EXCEPTION 'Group member limit reached (10000 members)';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to enforce group member limit
+CREATE TRIGGER enforce_group_member_limit
+  BEFORE INSERT ON group_members
+  FOR EACH ROW
+  EXECUTE FUNCTION check_group_member_limit();
+
+-- Create presence table
+CREATE TABLE IF NOT EXISTS presence (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT CHECK (status IN ('online', 'idle', 'dnd', 'offline')) DEFAULT 'online',
+  custom_status TEXT CHECK (char_length(custom_status) <= 100),
+  last_active TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Enable RLS on presence
+ALTER TABLE presence ENABLE ROW LEVEL SECURITY;
+
+-- Presence policies
+CREATE POLICY "Users can view all presence statuses" ON presence
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can update their own presence" ON presence
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own presence" ON presence
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Add presence to realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE presence;
+
+-- Create function to ensure presence record exists
+CREATE OR REPLACE FUNCTION ensure_user_presence()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.presence (user_id, status)
+  VALUES (NEW.id, 'online')
+  ON CONFLICT (user_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ language plpgsql security definer;
+
+-- Create trigger to create presence record on user creation
+DROP TRIGGER IF EXISTS on_auth_user_presence ON auth.users;
+CREATE TRIGGER on_auth_user_presence
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION ensure_user_presence();
+
+-- Create presence records for existing users
+INSERT INTO public.presence (user_id, status)
+SELECT id, 'offline' FROM auth.users
+ON CONFLICT (user_id) DO NOTHING;

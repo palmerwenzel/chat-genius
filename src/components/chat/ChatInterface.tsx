@@ -14,6 +14,7 @@ interface ChatInterfaceProps {
   title: string;
   subtitle?: string;
   channelId: string;
+  groupId: string;
   isLoading?: boolean;
   children: React.ReactNode;
 }
@@ -24,6 +25,7 @@ export function ChatInterface({
   title,
   subtitle,
   channelId,
+  groupId,
   isLoading,
   children,
 }: ChatInterfaceProps) {
@@ -93,6 +95,7 @@ export function ChatInterface({
               mimeType: file.type,
               filename: file.name,
               channelId,
+              groupId,
               messageId: message.id
             }, user!.id);
 
@@ -130,7 +133,7 @@ export function ChatInterface({
         variant: 'destructive',
       });
     }
-  }, [channelId, user?.id, toast, router]);
+  }, [channelId, groupId, user?.id, toast, router]);
 
   // Remove the separate handleFileUpload since it's now integrated into handleSendMessage
   const handleFileUpload = React.useCallback(async (file: File) => {

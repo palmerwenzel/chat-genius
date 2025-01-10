@@ -1,49 +1,55 @@
-import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Loader2 } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2 } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
-import { useToast } from '@/components/ui/use-toast';
-import { useAuth } from '@/stores/auth';
-import { useRouter } from 'next/navigation';
 
-const supabase = createClientComponentClient<Database>();
+const createGroupSchema = z.object({
+  name: z.string()
+    .min(1, 'Name is required')
+    .max(50, 'Name must be 50 characters or less')
+    .regex(/^[a-z0-9-]+$/, 'Only lowercase letters, numbers, and hyphens allowed'),
+  description: z.string().max(1000, 'Description must be 1000 characters or less').optional(),
+  isPublic: z.boolean().default(false),
+});
 
-interface CreateChannelForm {
-  name: string;
-  description?: string;
-  isPublic: boolean;
-}
+type CreateGroupForm = z.infer<typeof createGroupSchema>;
 
-interface CreateChannelModalProps {
-  groupId: string;
-  groupName: string;
+interface CreateGroupDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onChannelCreated?: (channelId: string) => void;
+  onGroupCreated?: (groupId: string) => void;
 }
 
-export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onChannelCreated }: CreateChannelModalProps) {
+export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: CreateGroupDialogProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const router = useRouter();
-  const form = useForm<CreateChannelForm>({
-    resolver: zodResolver(z.object({
-      name: z.string()
-        .min(2, 'Channel name must be at least 2 characters')
-        .max(100, 'Channel name must be less than 100 characters')
-        .regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
-      description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
-      isPublic: z.boolean().default(false),
-    })),
+  const supabase = createClientComponentClient<Database>();
+  const form = useForm<CreateGroupForm>({
+    resolver: zodResolver(createGroupSchema),
     defaultValues: {
       name: '',
       description: '',
@@ -51,64 +57,48 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
     },
   });
 
-  const onSubmit = async (data: CreateChannelForm) => {
-    if (!user?.id) {
+  const onSubmit = async (data: CreateGroupForm) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
       toast({
         title: 'Error',
-        description: 'You must be logged in to create a channel.',
+        description: 'You must be logged in to create a group.',
         variant: 'destructive',
       });
       return;
     }
 
     try {
-      // Check if channel name exists in this group
-      const { data: existingChannel } = await supabase
-        .from('channels')
-        .select('id')
-        .eq('name', data.name)
-        .eq('group_id', groupId)
-        .single();
-
-      if (existingChannel) {
-        form.setError('name', {
-          type: 'manual',
-          message: 'Channel name already exists in this group'
-        });
-        return;
-      }
-
-      const { data: channel, error } = await supabase
-        .from('channels')
+      // Create the group - the database trigger will automatically add the creator as owner
+      const { data: group, error: groupError } = await supabase
+        .from('groups')
         .insert({
           name: data.name,
           description: data.description || null,
           visibility: data.isPublic ? 'public' : 'private',
-          type: 'text',
-          created_by: user.id,
-          group_id: groupId,
+          created_by: session.user.id,
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (groupError) throw groupError;
 
       toast({
-        title: 'Channel created',
-        description: `#${data.name} has been created successfully.`,
+        title: 'Group created',
+        description: `${data.name} has been created successfully.`,
       });
 
-      onChannelCreated?.(channel.id);
+      onGroupCreated?.(group.id);
       onOpenChange(false);
       form.reset();
       
-      // Navigate to the new channel
-      router.push(`/chat/${groupName}/${data.name}`);
+      // Navigate to the new group
+      router.push(`/chat/${data.name}`);
     } catch (error) {
-      console.error('Error creating channel:', error);
+      console.error('Error creating group:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create channel. Please try again.',
+        description: 'Failed to create group. Please try again.',
         variant: 'destructive',
       });
     }
@@ -118,7 +108,7 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Create Channel in {groupName}</DialogTitle>
+          <DialogTitle>Create Group</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -127,10 +117,10 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Channel Name</FormLabel>
+                  <FormLabel>Group Name</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="e.g. general"
+                      placeholder="e.g. engineering"
                       {...field}
                       onChange={(e) => {
                         // Convert to lowercase and replace spaces with hyphens
@@ -154,7 +144,7 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
                   <FormLabel>Description</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="What's this channel about?"
+                      placeholder="What's this group about?"
                       className="resize-none"
                       {...field}
                     />
@@ -172,9 +162,9 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Public Channel</FormLabel>
+                    <FormLabel className="text-base">Public Group</FormLabel>
                     <FormDescription>
-                      Anyone in the workspace can view and join this channel.
+                      Anyone can find and join this group.
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -194,7 +184,7 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
                 {form.formState.isSubmitting && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Create Channel
+                Create Group
               </Button>
             </DialogFooter>
           </form>
