@@ -7,13 +7,17 @@ import { createServerSupabase } from "@/lib/server-supabase";
 import { notFound, redirect } from "next/navigation";
 import { ChatProvider } from "@/contexts/chat";
 
-export default async function ChannelPage({ 
-  params: { groupId, channelId }, 
-  searchParams = {} 
-}: {
-  params: { groupId: string; channelId: string };
-  searchParams?: { message?: string };
-}) {
+export interface PageProps {
+  params: {
+    groupId: string;
+    channelId: string;
+  };
+  searchParams?: {
+    message?: string;
+  };
+}
+
+export default async function ChannelPage({ params, searchParams = {} }: PageProps) {
   const supabase = await createServerSupabase();
 
   // Verify auth status
@@ -50,7 +54,7 @@ export default async function ChannelPage({
           user_id
         )
       `)
-      .eq('name', groupId)
+      .eq('name', params.groupId)
       .eq('group_members.user_id', session.user.id)
       .single(),
     
@@ -63,7 +67,7 @@ export default async function ChannelPage({
         description,
         visibility
       `)
-      .eq('name', groupId)
+      .eq('name', params.groupId)
       .eq('visibility', 'public')
       .single()
   ]);
@@ -91,7 +95,7 @@ export default async function ChannelPage({
           user_id
         )
       `)
-      .eq('name', channelId)
+      .eq('name', params.channelId)
       .eq('group_id', group.id)
       .eq('channel_members.user_id', session.user.id)
       .single(),
@@ -106,7 +110,7 @@ export default async function ChannelPage({
         visibility,
         group_id
       `)
-      .eq('name', channelId)
+      .eq('name', params.channelId)
       .eq('group_id', group.id)
       .eq('visibility', 'public')
       .single()
