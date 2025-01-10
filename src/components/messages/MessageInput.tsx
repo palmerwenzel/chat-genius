@@ -6,7 +6,7 @@ import { Plus, Send, Code, Image, FileText, Reply, X } from "lucide-react";
 import { FileUpload } from "./FileUpload";
 
 interface MessageInputProps {
-  onSend?: (content: string, type: 'text' | 'code', replyTo?: { id: string; content: string; author: string }) => void;
+  onSend?: (content: string, type: 'text' | 'code', attachments?: File[], replyTo?: { id: string; content: string; author: string }) => void;
   onUploadFile?: (file: File) => Promise<void>;
   placeholder?: string;
   disabled?: boolean;
@@ -36,8 +36,7 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
 }, ref) => {
   const [content, setContent] = React.useState(initialContent);
   const [isCode, setIsCode] = React.useState(initialType === 'code');
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = React.useState<number | null>(null);
+  const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -73,45 +72,21 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
   };
 
   const handleSend = () => {
-    if (content.trim() && onSend) {
-      onSend(content, isCode ? 'code' : 'text', replyTo);
+    if ((content.trim() || pendingFiles.length > 0) && onSend) {
+      onSend(content, isCode ? 'code' : 'text', pendingFiles, replyTo);
       setContent("");
       setIsCode(false);
+      setPendingFiles([]);
       if (onCancelReply) onCancelReply();
     }
   };
 
   const handleFileSelect = async (file: File) => {
-    setSelectedFile(file);
-    if (onUploadFile) {
-      try {
-        setUploadProgress(0);
-        // Simulate upload progress
-        const interval = setInterval(() => {
-          setUploadProgress(prev => {
-            if (prev === null || prev >= 100) {
-              clearInterval(interval);
-              return 100;
-            }
-            return prev + 10;
-          });
-        }, 200);
+    setPendingFiles(prev => [...prev, file]);
+  };
 
-        await onUploadFile(file);
-        clearInterval(interval);
-        setUploadProgress(100);
-        
-        // Clear the file after a brief delay to show completion
-        setTimeout(() => {
-          setSelectedFile(null);
-          setUploadProgress(null);
-        }, 500);
-      } catch (error) {
-        console.error('File upload failed:', error);
-        setSelectedFile(null);
-        setUploadProgress(null);
-      }
-    }
+  const handleRemoveFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleFileClick = () => {
@@ -161,19 +136,21 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
         </div>
       )}
 
-      {selectedFile && (
-        <FileUpload
-          selectedFile={selectedFile}
-          progress={uploadProgress ?? undefined}
-          onFileSelect={handleFileSelect}
-          onCancel={() => {
-            setSelectedFile(null);
-            setUploadProgress(null);
-          }}
-          className="mb-2"
-        />
+      {/* Pending Files */}
+      {pendingFiles.length > 0 && (
+        <div className="space-y-2">
+          {pendingFiles.map((file, index) => (
+            <FileUpload
+              key={index}
+              selectedFile={file}
+              onFileSelect={() => {}}
+              onCancel={() => handleRemoveFile(index)}
+              className="mb-2"
+            />
+          ))}
+        </div>
       )}
-      
+
       <div className="flex gap-2">
         <div className="flex-1">
           <Textarea
@@ -190,66 +167,66 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
           />
         </div>
 
-          {onCancel && (
+        {onCancel && (
+          <Button 
+            onClick={onCancel}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+        {!initialContent && (
+          <div className="flex flex-col justify-evenly gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={disabled}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48" align="start">
+                <div className="grid gap-1">
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setIsCode(!isCode)}
+                    disabled={disabled}
+                  >
+                    <Code className="mr-2 h-4 w-4" />
+                    {isCode ? "Switch to Text" : "Code Block"}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="justify-start"
+                    onClick={handleFileClick}
+                    disabled={disabled}
+                  >
+                    <Image className="mr-2 h-4 w-4" />
+                    Upload Image
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="justify-start"
+                    onClick={handleFileClick}
+                    disabled={disabled}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Upload File
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button 
-              onClick={onCancel}
-              variant="ghost"
+              onClick={handleSend}
+              disabled={(!content.trim() && !pendingFiles.length) || disabled}
               size="icon"
               className="h-8 w-8"
             >
-              <X className="h-4 w-4" />
+              <Send className="h-4 w-4" />
             </Button>
-          )}
-          {!initialContent && (
-        <div className="flex flex-col justify-evenly gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={disabled}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48" align="start">
-                  <div className="grid gap-1">
-                    <Button
-                      variant="ghost"
-                      className="justify-start"
-                      onClick={() => setIsCode(!isCode)}
-                      disabled={disabled}
-                    >
-                      <Code className="mr-2 h-4 w-4" />
-                      {isCode ? "Switch to Text" : "Code Block"}
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="justify-start"
-                      onClick={handleFileClick}
-                      disabled={disabled}
-                    >
-                      <Image className="mr-2 h-4 w-4" />
-                      Upload Image
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="justify-start"
-                      onClick={handleFileClick}
-                      disabled={disabled}
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Upload File
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-              <Button 
-                onClick={handleSend}
-                disabled={!content.trim() || disabled}
-                size="icon"
-                className="h-8 w-8"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-              </div>
-          )}
+          </div>
+        )}
       </div>
 
       {/* Format hint */}

@@ -52,22 +52,27 @@ export function ChatInterface({
   const handleSendMessage = React.useCallback(async (
     content: string, 
     type: 'text' | 'code' = 'text',
+    attachments?: File[],
     replyTo?: { id: string; content: string; author: string }
   ) => {
     try {
-      const { error } = await supabase
+      // First create the message
+      const { data: message, error: messageError } = await supabase
         .from('messages')
         .insert({
           channel_id: channelId,
           sender_id: user?.id,
           content,
           type,
-          replying_to_id: replyTo?.id
-        });
+          replying_to_id: replyTo?.id,
+          metadata: attachments ? { isFileUpload: true } : undefined
+        })
+        .select()
+        .single();
 
-      if (error) {
+      if (messageError) {
         // If it's an auth error, redirect to login
-        if (error.code === 'PGRST301' || error.message?.includes('auth')) {
+        if (messageError.code === 'PGRST301' || messageError.message?.includes('auth')) {
           toast({
             title: 'Authentication Required',
             description: 'Please log in to send messages.',
@@ -76,7 +81,46 @@ export function ChatInterface({
           router.push('/login?redirect=' + encodeURIComponent(window.location.pathname));
           return;
         }
-        throw error;
+        throw messageError;
+      }
+
+      // If there are attachments, upload them
+      if (attachments?.length) {
+        const uploadedFiles = await Promise.all(
+          attachments.map(async (file) => {
+            const publicUrl = await storageService.uploadFile('attachments', file, {
+              size: file.size,
+              mimeType: file.type,
+              filename: file.name,
+              channelId,
+              messageId: message.id
+            }, user!.id);
+
+            if (!publicUrl) {
+              throw new Error('Failed to upload file');
+            }
+
+            return {
+              url: publicUrl,
+              type: file.type,
+              name: file.name,
+              size: file.size
+            };
+          })
+        );
+
+        // Update the message with file metadata
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            metadata: {
+              isFileUpload: true,
+              attachments: uploadedFiles
+            }
+          })
+          .eq('id', message.id);
+
+        if (updateError) throw updateError;
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -88,69 +132,10 @@ export function ChatInterface({
     }
   }, [channelId, user?.id, toast, router]);
 
+  // Remove the separate handleFileUpload since it's now integrated into handleSendMessage
   const handleFileUpload = React.useCallback(async (file: File) => {
-    try {
-      if (!user) {
-        toast({
-          title: 'Authentication Required',
-          description: 'Please log in to upload files.',
-          variant: 'destructive',
-        });
-        router.push('/login?redirect=' + encodeURIComponent(window.location.pathname));
-        return;
-      }
-
-      console.log('Starting file upload:', {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        channelId,
-        user: user.id
-      });
-
-      // Verify channel ID format
-      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (!UUID_REGEX.test(channelId)) {
-        console.error('Invalid channel ID format:', channelId);
-        throw new Error('Invalid channel ID format');
-      }
-
-      const publicUrl = await storageService.uploadFile('attachments', file, {
-        size: file.size,
-        mimeType: file.type,
-        filename: file.name,
-        channelId
-      }, user.id);
-
-      if (!publicUrl) {
-        console.error('No public URL returned from upload');
-        throw new Error('Failed to upload file');
-      }
-
-      console.log('File uploaded successfully, public URL:', publicUrl);
-
-      // Send the message with the file URL
-      await handleSendMessage(publicUrl, 'text');
-      console.log('Message with file URL sent successfully');
-
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      if (error instanceof Error) {
-        toast({
-          title: 'Error',
-          description: error.message || 'Failed to upload file. Please try again.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to upload file. Please try again.',
-          variant: 'destructive',
-        });
-      }
-      throw error;
-    }
-  }, [channelId, handleSendMessage, toast, user, router]);
+    await handleSendMessage('', 'text', [file]);
+  }, [handleSendMessage]);
 
   return (
     <div className="flex flex-col h-full">

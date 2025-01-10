@@ -25,6 +25,15 @@ type MessageType = Database['public']['Tables']['messages']['Row'] & {
   };
   thread_id?: string;
   replying_to_id?: string;
+  metadata?: {
+    isFileUpload?: boolean;
+    attachments?: Array<{
+      url: string;
+      type: string;
+      name: string;
+      size: number;
+    }>;
+  };
 };
 
 interface Reaction {
@@ -43,7 +52,7 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
   const { setReplyTo } = useChatContext();
   const { user } = useAuth();
   const [reactions, setReactions] = useState<Reaction[]>([]);
-  const [threadCount, setThreadCount] = useState(0);
+  const [threadSize, setThreadSize] = useState(0);
   const [isThreadOpen, setIsThreadOpen] = useState(false);
   const [parentMessage, setParentMessage] = useState<MessageType | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -69,18 +78,18 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
   useEffect(() => {
     let mounted = true;
 
-    const loadThreadCount = async () => {
+    const loadThreadSize = async () => {
       const { count } = await supabase
         .from('messages')
         .select('id', { count: 'exact', head: true })
         .eq('thread_id', message.id);
 
       if (mounted && count !== null) {
-        setThreadCount(count);
+        setThreadSize(count);
       }
     };
 
-    loadThreadCount();
+    loadThreadSize();
 
     // Subscribe to thread count changes
     const subscription = supabase
@@ -92,7 +101,7 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
         filter: `thread_id=eq.${message.id}`
       }, async () => {
         // Reload count on any changes
-        loadThreadCount();
+        loadThreadSize();
       })
       .subscribe();
 
@@ -387,7 +396,7 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
     <>
       <MessageActions
         messageId={message.id}
-        replyCount={threadCount}
+        threadSize={threadSize}
         content={message.content}
         author={{
           name: message.sender.name,
@@ -400,6 +409,7 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
         onReply={(replyTo) => setReplyTo(replyTo)}
         onEdit={() => user?.id === message.sender.id && setIsEditing(true)}
         channelId={message.channel_id}
+        threadId={message.thread_id}
       >
         <div className="flex flex-col gap-1">
           {parentMessage && (
@@ -428,13 +438,13 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
                 <span className="text-xs text-muted-foreground">
                   {new Date(message.created_at).toLocaleString()}
                 </span>
-                {threadCount > 0 && (
+                {threadSize > 0 && (
                   <button
                     onClick={handleThreadClick}
                     className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors group/thread"
                   >
                     <Reply className="h-3 w-3 text-amber-400 group-hover/thread:text-amber-500 transition-colors" />
-                    {threadCount} thread replies
+                    {threadSize} thread replies
                   </button>
                 )}
               </div>
@@ -454,7 +464,11 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
                     rounded-lg w-fit
                     ${message.type === 'code' ? 'bg-muted font-mono' : 'bg-secondary/70 text-foreground p-3'}
                   `}>
-                    <MessageContent content={message.content} type={message.type || 'text'} />
+                    <MessageContent 
+                      content={message.content} 
+                      type={message.type || 'text'} 
+                      attachments={message.metadata?.attachments}
+                    />
                   </div>
 
                   {/* Link Previews */}

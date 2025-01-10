@@ -17,7 +17,7 @@ import { ThreadSidebar } from "@/components/threads/ThreadSidebar";
 
 interface MessageActionsProps {
   messageId: string;
-  replyCount?: number;
+  threadSize?: number;
   content: string;
   author: {
     name: string;
@@ -31,13 +31,14 @@ interface MessageActionsProps {
   onReply?: (replyTo: { id: string; content: string; author: string }) => void;
   onEdit?: () => void;
   channelId: string;
+  threadId?: string;
 }
 
 const commonEmojis = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "✨"];
 
 export function MessageActions({
   messageId,
-  replyCount = 0,
+  threadSize = 0,
   content,
   author,
   timestamp,
@@ -48,6 +49,7 @@ export function MessageActions({
   onReply,
   onEdit,
   channelId,
+  threadId,
 }: MessageActionsProps) {
   const { user } = useAuth();
 
@@ -178,13 +180,15 @@ export function MessageActions({
             Reply
           </ContextMenuItem>
 
-          <ContextMenuItem 
-            onClick={handleCreateThread}
-            className="cursor-pointer group"
-          >
-            <GitMerge className="h-4 w-4 mr-2 text-primary/70 group-hover:text-primary transition-colors" />
-            Create Thread {replyCount > 0 && `(${replyCount} replies)`}
-          </ContextMenuItem>
+          {!threadId && (
+            <ContextMenuItem 
+              onClick={handleCreateThread}
+              className="cursor-pointer group"
+            >
+              <GitMerge className="h-4 w-4 mr-2 text-primary/70 group-hover:text-primary transition-colors" />
+              {threadSize > 0 ? `View Thread (${threadSize})` : 'Create Thread'}
+            </ContextMenuItem>
+          )}
 
           <ContextMenuSeparator />
           
