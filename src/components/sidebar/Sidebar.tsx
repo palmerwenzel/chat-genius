@@ -15,6 +15,7 @@ import type { Database } from '@/types/supabase';
 import { Surface } from "../ui/surface";
 import { SearchButton } from "@/components/search/SearchButton";
 import { UserMenu } from "@/components/user/UserMenu";
+import { toast } from "@/components/ui/use-toast";
 
 const supabase = createClientComponentClient<Database>();
 
@@ -62,73 +63,59 @@ export const Sidebar = ({
   const currentGroupName = pathname?.split('/')?.[2];
   const currentGroup = groups.find(g => g.name === currentGroupName);
 
-  // Load channels when group changes
-  useEffect(() => {
-    async function loadChannels() {
-      if (!currentGroup?.id) {
-        setChannels([]);
-        return;
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-
-      // Get both member channels and public channels
-      const [{ data: memberChannels }, { data: publicChannels }] = await Promise.all([
-        // Get channels where user is a member
-        supabase
-          .from('channels')
-          .select(`
-            id,
-            name,
-            visibility,
-            channel_members!inner (
-              role,
-              user_id
-            )
-          `)
-          .eq('group_id', currentGroup.id)
-          .eq('channel_members.user_id', session.user.id)
-          .order('name'),
-        
-        // Get public channels
-        supabase
-          .from('channels')
-          .select(`
-            id,
-            name,
-            visibility,
-            channel_members!left (
-              role,
-              user_id
-            )
-          `)
-          .eq('group_id', currentGroup.id)
-          .eq('visibility', 'public')
-          .order('name')
-      ]);
-
-      if (!memberChannels && !publicChannels) {
-        console.error('Error loading channels');
-        return;
-      }
-
-      // Combine and deduplicate channels
-      const allChannels = [...(memberChannels || [])];
-      publicChannels?.forEach(publicChannel => {
-        if (!allChannels.some(c => c.id === publicChannel.id)) {
-          allChannels.push(publicChannel);
-        }
-      });
-
-      // Sort by name
-      allChannels.sort((a, b) => a.name.localeCompare(b.name));
-
-      setChannels(allChannels);
+  // Function to load channels (moved outside useEffect to be reusable)
+  const loadChannels = useCallback(async () => {
+    if (!currentGroup?.id) {
+      setChannels([]);
+      return;
     }
 
-    loadChannels();
+    try {
+      const { data: channelsData, error } = await supabase
+        .from('channels')
+        .select('*')
+        .eq('group_id', currentGroup.id)
+        .order('name');
+
+      if (error) throw error;
+
+      setChannels(channelsData || []);
+    } catch (error) {
+      console.error('Error loading channels:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load channels. Please try again.',
+        variant: 'destructive',
+      });
+    }
   }, [currentGroup?.id]);
+
+  // Subscribe to channel changes
+  useEffect(() => {
+    if (!currentGroup?.id) return;
+
+    loadChannels();
+
+    const channel = supabase
+      .channel(`group-${currentGroup.id}-channels`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'channels',
+          filter: `group_id=eq.${currentGroup.id}`,
+        },
+        () => {
+          loadChannels();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [currentGroup?.id, loadChannels]);
 
   useEffect(() => {
     async function loadGroups() {
@@ -243,57 +230,6 @@ export const Sidebar = ({
       router.push(`/chat/${currentGroupName}/${channelName}`);
     }
   }, [router, currentGroupName]);
-
-  useEffect(() => {
-    if (!currentGroup?.id) return;
-
-    const channel = supabase.channel('sidebar-channels')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'channels',
-        filter: `group_id=eq.${currentGroup.id}`
-      }, () => {
-        loadChannels();
-      })
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [currentGroup?.id]);
-
-  // Function to load channels (moved outside useEffect to be reusable)
-  const loadChannels = async () => {
-    if (!currentGroup?.id) {
-      setChannels([]);
-      return;
-    }
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
-
-    const { data: channelData, error } = await supabase
-      .from('channels')
-      .select(`
-        id,
-        name,
-        visibility,
-        channel_members!inner (
-          role
-        )
-      `)
-      .eq('group_id', currentGroup.id)
-      .eq('channel_members.user_id', session.user.id)
-      .order('name');
-
-    if (error) {
-      console.error('Error loading channels:', error);
-      return;
-    }
-
-    setChannels(channelData || []);
-  };
 
   return (
     <div className="w-[var(--sidebar-width-sm)] md:w-[var(--sidebar-width)] border-r backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col h-screen">

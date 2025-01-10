@@ -19,11 +19,10 @@ interface Member {
 }
 
 interface MemberListProps {
-  channelId: string;
   members: Member[];
 }
 
-export function MemberList({ channelId, members }: MemberListProps) {
+export function MemberList({ members }: MemberListProps) {
   const getRoleIcon = (role: Member["role"]) => {
     switch (role) {
       case "owner":

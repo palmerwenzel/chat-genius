@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
 import { PostgrestError } from '@supabase/supabase-js';
+import Image from 'next/image';
 
 type Member = {
   id: string;
@@ -200,10 +201,12 @@ export function ChannelSidebar({ channelId, groupId, className }: ChannelSidebar
                   />
                   <div className="flex items-center gap-2">
                     {member.avatar_url ? (
-                      <img
+                      <Image
                         src={member.avatar_url}
                         alt={member.name}
-                        className="h-6 w-6 rounded-full"
+                        width={24}
+                        height={24}
+                        className="rounded-full"
                       />
                     ) : (
                       <UserRound className="h-6 w-6 text-muted-foreground" />

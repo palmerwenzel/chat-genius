@@ -1,9 +1,7 @@
 import { cn } from "@/lib/utils";
 import styles from "./surface.module.css";
 
-interface SurfaceProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export function Surface({ className, children, ...props }: SurfaceProps) {
+export function Surface({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(

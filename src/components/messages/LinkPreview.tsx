@@ -1,3 +1,5 @@
+import * as React from 'react';
+import Image from 'next/image';
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExternalLink } from "lucide-react";
@@ -57,20 +59,23 @@ export function LinkPreview({ url, metadata, isLoading }: LinkPreviewProps) {
       >
         {image && (
           <div className="flex-shrink-0">
-            <img
+            <Image
               src={image}
               alt={title || "Link preview"}
-              className="h-16 w-16 object-cover rounded-md"
+              width={64}
+              height={64}
+              className="object-cover rounded-md"
             />
           </div>
         )}
         <div className="flex-1 space-y-1 min-w-0">
           <div className="flex items-center gap-2">
             {favicon && (
-              <img
+              <Image
                 src={favicon}
                 alt=""
-                className="h-4 w-4"
+                width={16}
+                height={16}
               />
             )}
             <h4 className="font-medium text-sm truncate">

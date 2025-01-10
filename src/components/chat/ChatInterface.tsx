@@ -133,12 +133,7 @@ export function ChatInterface({
         variant: 'destructive',
       });
     }
-  }, [channelId, groupId, user?.id, toast, router]);
-
-  // Remove the separate handleFileUpload since it's now integrated into handleSendMessage
-  const handleFileUpload = React.useCallback(async (file: File) => {
-    await handleSendMessage('', 'text', [file]);
-  }, [handleSendMessage]);
+  }, [channelId, groupId, user, toast, router]);
 
   return (
     <div className="flex flex-col h-full">
@@ -159,7 +154,6 @@ export function ChatInterface({
           <MessageInput
             ref={messageInputRef}
             onSend={handleSendMessage}
-            onUploadFile={handleFileUpload}
             disabled={isLoading}
             replyTo={replyTo || undefined}
             onCancelReply={() => setReplyTo(null)}

@@ -1,7 +1,6 @@
 import { create } from 'zustand';
-import type { User } from '@supabase/supabase-js';
+import { User } from '@supabase/supabase-js';
 import { auth } from '@/services/auth';
-import type { StateCreator } from 'zustand';
 
 interface AuthState {
   user: User | null;
@@ -14,8 +13,6 @@ interface AuthState {
   signInWithProvider: (provider: 'github' | 'google') => Promise<void>;
   updateProfile: (profile: { name?: string; avatar_url?: string }) => Promise<void>;
 }
-
-type AuthStore = StateCreator<AuthState>;
 
 export const useAuth = create<AuthState>((set) => ({
   user: null,

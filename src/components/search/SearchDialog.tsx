@@ -106,11 +106,6 @@ export function SearchDialog({ open, onOpenChange, mode, channelId }: SearchDial
     onOpenChange(false);
   };
 
-  // Handle filter type change
-  const handleTypeChange = (type: SearchType) => {
-    setFilters(f => ({ ...f, type }));
-  };
-
   // Handle date range change
   const handleDateRangeChange = (range: DateRange | undefined) => {
     setFilters(f => ({

@@ -1,3 +1,5 @@
+import * as React from 'react';
+import Image from 'next/image';
 import { FileText } from 'lucide-react';
 
 interface MessageContentProps {
@@ -48,9 +50,11 @@ export function MessageContent({ content, type, attachments }: MessageContentPro
                 rel="noopener noreferrer"
                 className="block"
               >
-                <img
+                <Image
                   src={attachment.url}
                   alt={attachment.name}
+                  width={800}
+                  height={600}
                   className="w-full h-auto rounded-lg border shadow-sm hover:brightness-95 transition-all cursor-pointer"
                 />
               </a>

@@ -7,7 +7,6 @@ import { FileUpload } from "./FileUpload";
 
 interface MessageInputProps {
   onSend?: (content: string, type: 'text' | 'code', attachments?: File[], replyTo?: { id: string; content: string; author: string }) => void;
-  onUploadFile?: (file: File) => Promise<void>;
   placeholder?: string;
   disabled?: boolean;
   replyTo?: {
@@ -24,7 +23,6 @@ interface MessageInputProps {
 
 export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInputProps>(({ 
   onSend, 
-  onUploadFile, 
   placeholder = "Type a message...", 
   disabled,
   replyTo,
@@ -202,6 +200,7 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
                     onClick={handleFileClick}
                     disabled={disabled}
                   >
+                    {/* eslint-disable-next-line jsx-a11y/alt-text */}
                     <Image className="mr-2 h-4 w-4" />
                     Upload Image
                   </Button>
