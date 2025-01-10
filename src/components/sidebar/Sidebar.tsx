@@ -11,6 +11,7 @@ import { CreateChannelModal } from '@/components/channels/CreateChannelModal';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Surface } from "../ui/surface";
+import { SearchButton } from "@/components/search/SearchButton";
 
 interface Channel {
   id: string;
@@ -71,7 +72,7 @@ export const Sidebar = ({
   }, [router]);
 
   return (
-    <div className="w-64 border-r backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="w-[var(--sidebar-width-sm)] md:w-[var(--sidebar-width)] border-r backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="p-4 border-b">
         <div className="flex items-center justify-between">
           <Link href="/chat">
@@ -80,6 +81,12 @@ export const Sidebar = ({
           <Button variant="ghost" size="icon" className="hover:scale-110 transition-transform">
             <Settings className="h-4 w-4" />
           </Button>
+        </div>
+        <div className="mt-4">
+          <SearchButton 
+            mode="channel" 
+            placeholder="Search channels..."
+          />
         </div>
       </div>
       <Surface>

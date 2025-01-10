@@ -461,24 +461,33 @@
     - Added resource limits documentation
 
 ### Day 6: Real-time Infrastructure
-- [ ] Set up Supabase Realtime client
-- [ ] Implement real-time message handling
-- [ ] Add presence tracking
-- [ ] Enable typing indicators
-- [ ] Configure Realtime subscriptions
+- [x] Set up Supabase Realtime client
+- [x] Implement real-time message handling
+- [x] Add presence tracking
+- [x] Enable typing indicators
+- [x] Configure Realtime subscriptions
 
 ### Day 7: Core Features Backend
-- [ ] Channel management system
-- [ ] Message persistence
-- [ ] Thread functionality
-- [ ] Storage system
-  - [ ] Configure Storage buckets
-  - [ ] Set up security policies
-  - [ ] Implement file metadata tracking
-- [ ] Implement full-text search
-  - [ ] Set up search indices
-  - [ ] Create search queries
-  - [ ] Implement results pagination
+- [x] Channel management system
+- [x] Message persistence
+- [x] Thread functionality
+- [x] Storage system
+  - [x] Configure Storage buckets
+  - [x] Set up security policies
+  - [x] Implement file metadata tracking
+- [x] Implement full-text search
+  - [x] Set up search indices
+    - Added GiST indices for text search
+    - Added GIN indices for trigrams
+    - Created combined channel indices
+  - [x] Create search queries
+    - Implemented message search function
+    - Implemented channel search function
+    - Added relevance ranking
+  - [x] Implement results pagination
+    - Added offset-based pagination
+    - Added total count tracking
+    - Added sorting by relevance
 
 ## Phase 3: AI Integration
 

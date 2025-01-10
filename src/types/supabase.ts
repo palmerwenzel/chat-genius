@@ -73,6 +73,7 @@ export interface Database {
           parent_id: string | null
           is_edited: boolean
           attachments: Json[] | null
+          deleted_at: string | null
         }
         Insert: {
           id?: string
@@ -85,6 +86,7 @@ export interface Database {
           parent_id?: string | null
           is_edited?: boolean
           attachments?: Json[] | null
+          deleted_at?: string | null
         }
         Update: {
           id?: string
@@ -97,6 +99,7 @@ export interface Database {
           parent_id?: string | null
           is_edited?: boolean
           attachments?: Json[] | null
+          deleted_at?: string | null
         }
       }
       reactions: {

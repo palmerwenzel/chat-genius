@@ -7,8 +7,35 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient<Database>({ req, res })
 
-  // Refresh session if expired - required for Server Components
-  await supabase.auth.getSession()
+  // Check if this is a protected route
+  const isProtectedRoute = req.nextUrl.pathname.startsWith('/chat')
+    || req.nextUrl.pathname.startsWith('/api/search')
+    || req.nextUrl.pathname.startsWith('/api/messages');
+
+  if (isProtectedRoute) {
+    // Get session
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session?.user) {
+      return NextResponse.redirect(new URL('/login', req.url))
+    }
+
+    // Verify user exists in database
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', session.user.id)
+      .single();
+
+    if (error || !user) {
+      // Clear auth cookies and redirect to login
+      await supabase.auth.signOut()
+      return NextResponse.redirect(new URL('/login', req.url))
+    }
+  } else {
+    // For non-protected routes, just refresh the session
+    await supabase.auth.getSession()
+  }
 
   return res
 }

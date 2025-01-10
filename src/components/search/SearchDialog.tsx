@@ -1,201 +1,234 @@
 import * as React from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { useRouter } from 'next/navigation';
+import { useDebounce } from '@/hooks/useDebounce';
+import type { SearchResult, Message, Channel } from '@/services/search';
+import { Command } from 'cmdk';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Hash, User, MessageSquare, Loader2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
-import { useDebounce } from '@/hooks/use-debounce';
-import { Database } from '@/types/supabase';
-
-export type SearchResult = {
-  id: string;
-  type: 'channel' | 'user' | 'message' | 'file';
-  title: string;
-  subtitle: string;
-  timestamp?: string;
-  icon?: React.ReactNode;
-};
-
-type FilterType = 'all' | 'channel' | 'user' | 'message' | 'file';
+import { CalendarIcon, Hash, MessageCircle } from 'lucide-react';
+import type { DateRange } from 'react-day-picker';
 
 interface SearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onResultSelect: (result: SearchResult) => void;
+  mode: 'channel' | 'message';
+  channelId?: string; // Only needed for message mode
 }
 
-export function SearchDialog({ open, onOpenChange, onResultSelect }: SearchDialogProps) {
-  const [filter, setFilter] = React.useState<FilterType>('all');
+type SearchType = 'all' | 'message' | 'channel';
+
+export function SearchDialog({ open, onOpenChange, mode, channelId }: SearchDialogProps) {
+  const router = useRouter();
   const [query, setQuery] = React.useState('');
-  const [isLoading, setIsLoading] = React.useState(false);
   const debouncedQuery = useDebounce(query, 300);
-
+  const [loading, setLoading] = React.useState(false);
   const [results, setResults] = React.useState<SearchResult[]>([]);
+  const [activeQuery, setActiveQuery] = React.useState('');
+  const [filters, setFilters] = React.useState({
+    type: mode as SearchType,
+    startDate: undefined as Date | undefined,
+    endDate: undefined as Date | undefined,
+  });
 
+  // Search when query or filters change
   React.useEffect(() => {
-    async function performSearch() {
-      if (!debouncedQuery) {
-        setResults([]);
-        return;
-      }
-
-      setIsLoading(true);
+    async function search() {
+      setLoading(true);
       try {
-        // Search channels
-        const channelResults = filter === 'all' || filter === 'channel' 
-          ? await supabase
-              .from('channels')
-              .select('id, name, description')
-              .textSearch('name', debouncedQuery)
-              .limit(5)
-          : null;
+        const params = new URLSearchParams({
+          q: debouncedQuery,
+          type: mode,
+          ...(mode === 'message' && channelId && { channelId }),
+          ...(filters.startDate && { startDate: filters.startDate.toISOString() }),
+          ...(filters.endDate && { endDate: filters.endDate.toISOString() }),
+        });
 
-        // Search users
-        const userResults = filter === 'all' || filter === 'user'
-          ? await supabase
-              .from('profiles')
-              .select('id, username, full_name')
-              .textSearch('username', debouncedQuery)
-              .limit(5)
-          : null;
-
-        // Search messages
-        const messageResults = filter === 'all' || filter === 'message'
-          ? await supabase
-              .from('messages')
-              .select(`
-                id,
-                content,
-                channel_id,
-                created_at,
-                channels (
-                  name
-                )
-              `)
-              .textSearch('content', debouncedQuery)
-              .limit(5)
-          : null;
-
-        const formattedResults: SearchResult[] = [
-          ...(channelResults?.data?.map(channel => ({
-            id: channel.id,
-            type: 'channel' as const,
-            title: `#${channel.name}`,
-            subtitle: channel.description || 'No description',
-            icon: <Hash className="h-4 w-4" />,
-          })) || []),
-          ...(userResults?.data?.map(user => ({
-            id: user.id,
-            type: 'user' as const,
-            title: user.full_name || user.username,
-            subtitle: `@${user.username}`,
-            icon: <User className="h-4 w-4" />,
-          })) || []),
-          ...(messageResults?.data?.map(message => ({
-            id: message.id,
-            type: 'message' as const,
-            title: message.content.slice(0, 100),
-            subtitle: `in #${message.channels?.name || 'unknown channel'}`,
-            timestamp: new Date(message.created_at).toLocaleTimeString(),
-            icon: <MessageSquare className="h-4 w-4" />,
-          })) || []),
-        ];
-
-        setResults(formattedResults);
+        console.log('Making search request to:', `/api/search?${params}`);
+        const response = await fetch(`/api/search?${params}`);
+        console.log('Search response status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Search response error:', errorText);
+          throw new Error(`Search failed: ${response.status} ${errorText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Search results:', data);
+        setResults(data.results);
+        setActiveQuery(debouncedQuery);
       } catch (error) {
-        console.error('Search error:', error);
+        console.error('Search error details:', {
+          name: error instanceof Error ? error.name : 'Unknown error',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        });
         setResults([]);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     }
 
-    performSearch();
-  }, [debouncedQuery, filter]);
+    if (!debouncedQuery) {
+      setLoading(false);
+      setResults([]);
+      setActiveQuery('');
+      return;
+    }
+
+    search();
+  }, [debouncedQuery, filters, mode, channelId]);
+
+  // Handle result selection
+  const handleSelect = (result: SearchResult) => {
+    if (result.type === 'channel') {
+      const channel = result.item as Channel;
+      router.push(`/chat/${channel.name}`);
+    } else {
+      const message = result.item as Message & { channel: Channel };
+      router.push(`/chat/${message.channel.name}?message=${message.id}`);
+    }
+    onOpenChange(false);
+  };
+
+  // Handle filter type change
+  const handleTypeChange = (type: SearchType) => {
+    setFilters(f => ({ ...f, type }));
+  };
+
+  // Handle date range change
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    setFilters(f => ({
+      ...f,
+      startDate: range?.from,
+      endDate: range?.to,
+    }));
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl overflow-hidden p-0">
-        <div className="flex items-center border-b p-4">
-          <div className="flex flex-1 items-center space-x-2">
-            <Input
-              className="flex-1"
-              placeholder="Search..."
+      <DialogContent className="sm:max-w-[850px] gap-0 p-0 outline-none">
+        <DialogHeader className="px-4 pb-4 pt-5">
+          <DialogTitle>
+            {mode === 'channel' ? 'Search Channels' : 'Search Messages'}
+          </DialogTitle>
+        </DialogHeader>
+        <Command shouldFilter={false} className="overflow-hidden rounded-t-none border-t">
+          <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
+            <Command.Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onValueChange={setQuery}
+              placeholder={mode === 'channel' ? "Search channels..." : "Search messages in this channel..."}
+              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
-          <div className="ml-2 flex items-center space-x-2">
-            <Button
-              variant={filter === 'all' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setFilter('all')}
-            >
-              All
-            </Button>
-            <Button
-              variant={filter === 'channel' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setFilter('channel')}
-            >
-              Channels
-            </Button>
-            <Button
-              variant={filter === 'user' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setFilter('user')}
-            >
-              Users
-            </Button>
-            <Button
-              variant={filter === 'message' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setFilter('message')}
-            >
-              Messages
-            </Button>
-          </div>
-        </div>
-        <div className="max-h-[50vh] overflow-y-auto p-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          {mode === 'message' && (
+            <div className="flex items-center gap-2 border-b px-4 py-2 h-12">
+              <div className="ml-auto">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={filters.startDate || filters.endDate ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className={cn(
+                        'justify-start text-left font-normal',
+                        !filters.startDate && !filters.endDate && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filters.startDate ? (
+                        filters.endDate ? (
+                          <>
+                            {format(filters.startDate, 'LLL dd, y')} -{' '}
+                            {format(filters.endDate, 'LLL dd, y')}
+                          </>
+                        ) : (
+                          format(filters.startDate, 'LLL dd, y')
+                        )
+                      ) : (
+                        'Date range'
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={filters.startDate}
+                      selected={{
+                        from: filters.startDate,
+                        to: filters.endDate,
+                      }}
+                      onSelect={handleDateRangeChange}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
-          ) : results.length > 0 ? (
-            <div className="space-y-2">
+          )}
+          <Command.List className="h-[400px] overflow-hidden">
+            <Command.Empty className="py-6 text-center text-sm">
+              {loading ? 'Searching...' : activeQuery ? 'No results found.' : 'Type to start searching...'}
+            </Command.Empty>
+            <ScrollArea className="h-full">
               {results.map((result) => (
-                <button
-                  key={`${result.type}-${result.id}`}
-                  className={cn(
-                    'w-full rounded-lg p-2 text-left hover:bg-accent',
-                    'focus:bg-accent focus:outline-none'
-                  )}
-                  onClick={() => onResultSelect(result)}
+                <Command.Item
+                  key={`${result.type}-${result.item.id}`}
+                  onSelect={() => handleSelect(result)}
+                  className="px-4 py-2"
                 >
-                  <div className="flex items-center">
-                    <div className="mr-2">{result.icon}</div>
-                    <div className="flex-1 overflow-hidden">
-                      <div className="truncate font-medium">{result.title}</div>
-                      <div className="truncate text-sm text-muted-foreground">
-                        {result.subtitle}
-                      </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      {result.type === 'channel' ? (
+                        <>
+                          <Hash className="h-4 w-4" />
+                          <span className="font-medium">
+                            {(result.item as Channel).name}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <MessageCircle className="h-4 w-4" />
+                          <span className="font-medium">
+                            Message in #{(result.item as Message).channel_id}
+                          </span>
+                        </>
+                      )}
+                      <Badge variant="secondary" className="ml-auto">
+                        {result.type}
+                      </Badge>
                     </div>
-                    {result.timestamp && (
-                      <div className="ml-2 text-sm text-muted-foreground">
-                        {result.timestamp}
-                      </div>
-                    )}
+                    <div
+                      className="text-sm text-muted-foreground"
+                      dangerouslySetInnerHTML={{
+                        __html: result.highlight.replace(
+                          /\*\*(.*?)\*\*/g,
+                          '<mark class="bg-yellow-200 dark:bg-yellow-800">$1</mark>'
+                        ),
+                      }}
+                    />
                   </div>
-                </button>
+                </Command.Item>
               ))}
-            </div>
-          ) : query ? (
-            <div className="py-8 text-center text-muted-foreground">
-              No results found.
-            </div>
-          ) : null}
-        </div>
+            </ScrollArea>
+          </Command.List>
+        </Command>
       </DialogContent>
     </Dialog>
   );

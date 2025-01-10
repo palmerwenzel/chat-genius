@@ -1,19 +1,20 @@
 'use client';
 
-import { useCallback } from 'react';
-import { MessageInput } from "@/components/messages/MessageInput";
-import { supabase } from '@/lib/supabase';
-import { useToast } from '@/components/ui/use-toast';
+import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { MessageInput } from "@/components/messages/MessageInput";
+import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/stores/auth';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { useChatContext } from '@/contexts/chat';
+import { supabase } from '@/lib/supabase';
+import { storageService } from '@/services/storage';
 
 interface ChatInterfaceProps {
   title: string;
   subtitle?: string;
   channelId: string;
   isLoading?: boolean;
-  children?: React.ReactNode;
+  children: React.ReactNode;
 }
 
 export function ChatInterface({
@@ -26,17 +27,39 @@ export function ChatInterface({
   const { toast } = useToast();
   const router = useRouter();
   const { user } = useAuth();
+  const { replyTo, setReplyTo } = useChatContext();
+  const messageInputRef = React.useRef<{ focus: () => void }>(null);
 
-  const handleSendMessage = useCallback(async (content: string, type: 'text' | 'code' = 'text') => {
+  const scrollToMessage = React.useCallback((messageId: string) => {
+    const messageElement = document.getElementById(`message-${messageId}`);
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
+  // Focus input when replying
+  React.useEffect(() => {
+    if (replyTo) {
+      requestAnimationFrame(() => {
+        messageInputRef.current?.focus();
+      });
+    }
+  }, [replyTo]);
+
+  const handleSendMessage = React.useCallback(async (
+    content: string, 
+    type: 'text' | 'code' = 'text',
+    replyTo?: { id: string; content: string; author: string }
+  ) => {
     try {
-      // Get current user ID for the message
       const { error } = await supabase
         .from('messages')
         .insert({
           channel_id: channelId,
-          sender_id: user?.id,  // Supabase RLS will validate this matches auth.uid()
+          sender_id: user?.id,
           content,
-          type
+          type,
+          replying_to_id: replyTo?.id
         });
 
       if (error) {
@@ -62,73 +85,96 @@ export function ChatInterface({
     }
   }, [channelId, user?.id, toast, router]);
 
-  const handleFileUpload = useCallback(async (file: File) => {
+  const handleFileUpload = React.useCallback(async (file: File) => {
     try {
-      // Upload file to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${channelId}/${fileName}`;
-
-      const { error: uploadError } = await supabase
-        .storage
-        .from('attachments')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        // If it's an auth error, redirect to login
-        if (uploadError.message?.includes('auth')) {
-          toast({
-            title: 'Authentication Required',
-            description: 'Please log in to upload files.',
-            variant: 'destructive',
-          });
-          router.push('/login?redirect=' + encodeURIComponent(window.location.pathname));
-          return;
-        }
-        throw uploadError;
+      if (!user) {
+        toast({
+          title: 'Authentication Required',
+          description: 'Please log in to upload files.',
+          variant: 'destructive',
+        });
+        router.push('/login?redirect=' + encodeURIComponent(window.location.pathname));
+        return;
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase
-        .storage
-        .from('attachments')
-        .getPublicUrl(filePath);
+      console.log('Starting file upload:', {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        channelId,
+        user: user.id
+      });
 
-      // Send message with attachment
-      await handleSendMessage(`[File: ${file.name}](${publicUrl})`, 'text');
+      // Verify channel ID format
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!UUID_REGEX.test(channelId)) {
+        console.error('Invalid channel ID format:', channelId);
+        throw new Error('Invalid channel ID format');
+      }
+
+      const publicUrl = await storageService.uploadFile('attachments', file, {
+        size: file.size,
+        mimeType: file.type,
+        filename: file.name,
+        channelId
+      }, user.id);
+
+      if (!publicUrl) {
+        console.error('No public URL returned from upload');
+        throw new Error('Failed to upload file');
+      }
+
+      console.log('File uploaded successfully, public URL:', publicUrl);
+
+      // Send the message with the file URL
+      await handleSendMessage(publicUrl, 'text');
+      console.log('Message with file URL sent successfully');
+
     } catch (error) {
       console.error('Error uploading file:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to upload file. Please try again.',
-        variant: 'destructive',
-      });
+      if (error instanceof Error) {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to upload file. Please try again.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to upload file. Please try again.',
+          variant: 'destructive',
+        });
+      }
+      throw error;
     }
-  }, [channelId, handleSendMessage, toast, router]);
+  }, [channelId, handleSendMessage, toast, user, router]);
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
-        <h2 className="text-lg font-semibold mb-1">{title}</h2>
-        {subtitle && (
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
-        )}
-      </div>
-
-      <ScrollArea className="flex-1 flex flex-col">
-        <div className="flex-1 flex flex-col justify-end">
-          {children}
+      <div className="border-b px-6 py-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold">{title}</h1>
+          {subtitle && (
+            <span className="text-sm text-muted-foreground">{subtitle}</span>
+          )}
         </div>
-      </ScrollArea>
-
-      <div className="p-4 border-t mt-auto">
-        <MessageInput
-          onSend={handleSendMessage}
-          onUploadFile={handleFileUpload}
-          disabled={isLoading || !channelId}
-          placeholder={!channelId ? "Select a channel to start chatting" : "Type a message..."}
-        />
       </div>
+
+      <div className="flex-1 overflow-y-auto hover:pr-0 pr-[12px] transition-[padding] duration-150 flex flex-col min-h-0">
+        {children}
+      </div>
+
+        <div className="p-4 mt-2 border-t">
+          <MessageInput
+            ref={messageInputRef}
+            onSend={handleSendMessage}
+            onUploadFile={handleFileUpload}
+            disabled={isLoading}
+            replyTo={replyTo || undefined}
+            onCancelReply={() => setReplyTo(null)}
+            onNavigateToMessage={scrollToMessage}
+          />
+        </div>
     </div>
   );
 } 

@@ -25,14 +25,14 @@ export default async function ChatLayout({
   })) || [];
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden">
+    <div className="fixed inset-0 flex">
       {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 border-r">
+      <aside className="w-[var(--sidebar-width-sm)] md:w-[var(--sidebar-width)] flex-shrink-0">
         <Sidebar channels={channels} />
       </aside>
 
       {/* Main content area */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {children}
       </main>
     </div>

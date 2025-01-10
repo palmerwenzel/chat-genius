@@ -41,9 +41,14 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL CHECK (char_length(content) <= 4000),
   type TEXT CHECK (type IN ('text', 'code')) DEFAULT 'text',
   metadata JSONB DEFAULT '{}',
+  replying_to_id UUID REFERENCES messages(id) ON DELETE SET NULL,
   thread_id UUID REFERENCES messages(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+  -- Ensure a message can't be its own thread or reply
+  CONSTRAINT message_not_self_thread CHECK (thread_id != id),
+  CONSTRAINT message_not_self_reply CHECK (replying_to_id != id)
 );
 
 -- Create reactions table
@@ -143,6 +148,7 @@ CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
 CREATE INDEX IF NOT EXISTS channels_created_by_idx ON channels(created_by);
 CREATE INDEX IF NOT EXISTS messages_channel_id_idx ON messages(channel_id);
 CREATE INDEX IF NOT EXISTS messages_sender_id_idx ON messages(sender_id);
+CREATE INDEX IF NOT EXISTS messages_replying_to_id_idx ON messages(replying_to_id);
 CREATE INDEX IF NOT EXISTS messages_thread_id_idx ON messages(thread_id);
 CREATE INDEX IF NOT EXISTS messages_created_at_idx ON messages(created_at DESC);
 CREATE INDEX IF NOT EXISTS reactions_message_id_idx ON reactions(message_id);
@@ -266,3 +272,185 @@ CREATE POLICY "Users can view reactions in their channels" ON reactions
 CREATE POLICY "Users can manage their own reactions" ON reactions
   FOR ALL USING (user_id = auth.uid());
 */
+
+-- Create function to enforce thread base message rules
+CREATE OR REPLACE FUNCTION check_thread_base_message()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- If this message is a thread base (has messages pointing to it as thread_id)
+  -- then it cannot itself be in a thread
+  IF EXISTS (
+    SELECT 1 FROM messages 
+    WHERE thread_id = NEW.id
+  ) AND NEW.thread_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Thread base messages cannot be in a thread themselves';
+  END IF;
+
+  -- If this message is being added to a thread, ensure the thread base exists
+  -- and is not itself in a thread
+  IF NEW.thread_id IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM messages 
+      WHERE id = NEW.thread_id 
+      AND thread_id IS NOT NULL
+    ) THEN
+      RAISE EXCEPTION 'Cannot add message to a thread whose base message is in another thread';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to enforce thread base message rules
+CREATE TRIGGER enforce_thread_base_message_rules
+  BEFORE INSERT OR UPDATE ON messages
+  FOR EACH ROW
+  EXECUTE FUNCTION check_thread_base_message();
+
+-- Create storage buckets
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES 
+  (
+    'attachments',
+    'attachments',
+    true,
+    100 * 1024 * 1024, -- 100MB for attachments
+    ARRAY[
+      'image/*',
+      'video/*',
+      'audio/*',
+      'application/pdf',
+      'text/*',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ]::text[]
+  ),
+  (
+    'avatars',
+    'avatars',
+    true,
+    5 * 1024 * 1024, -- 5MB for avatars
+    ARRAY['image/*']::text[]
+  )
+ON CONFLICT (id) DO 
+  UPDATE SET 
+    public = EXCLUDED.public,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- Enable RLS on storage.objects
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- Create file_metadata table
+CREATE TABLE file_metadata (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  file_path TEXT NOT NULL,
+  bucket TEXT NOT NULL,
+  size BIGINT NOT NULL,
+  mime_type TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  channel_id UUID REFERENCES channels(id) ON DELETE CASCADE,
+  message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+  uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Enable RLS
+ALTER TABLE file_metadata ENABLE ROW LEVEL SECURITY;
+
+-- File metadata policies
+CREATE POLICY "Users can view files in their channels"
+  ON file_metadata
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM channel_members 
+      WHERE channel_members.channel_id = file_metadata.channel_id 
+      AND channel_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can upload files to their channels"
+  ON file_metadata
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM channel_members 
+      WHERE channel_members.channel_id = file_metadata.channel_id 
+      AND channel_members.user_id = auth.uid()
+    )
+    AND auth.uid() = uploaded_by
+  );
+
+CREATE POLICY "Users can delete their own files"
+  ON file_metadata
+  FOR DELETE
+  USING (uploaded_by = auth.uid());
+
+-- Storage bucket policies
+CREATE POLICY "Users can read files from their channels"
+  ON storage.objects
+  FOR SELECT
+  USING (
+    bucket_id IN ('attachments', 'avatars')
+    AND (
+      CASE 
+        WHEN bucket_id = 'attachments' THEN
+          EXISTS (
+            SELECT 1 FROM file_metadata
+            JOIN channel_members ON file_metadata.channel_id = channel_members.channel_id
+            WHERE file_metadata.file_path = name
+            AND channel_members.user_id = auth.uid()
+          )
+        WHEN bucket_id = 'avatars' THEN
+          -- Anyone can view avatars
+          true
+        ELSE
+          false
+      END
+    )
+  );
+
+CREATE POLICY "Users can upload files"
+  ON storage.objects
+  FOR INSERT
+  WITH CHECK (
+    bucket_id IN ('attachments', 'avatars')
+    AND (
+      CASE
+        WHEN bucket_id = 'attachments' THEN
+          -- Allow authenticated users to upload to attachments bucket
+          auth.role() = 'authenticated'
+        WHEN bucket_id = 'avatars' THEN
+          -- Users can only upload their own avatar
+          (regexp_split_to_array(name, '/'))[1] = auth.uid()::text
+        ELSE
+          false
+      END
+    )
+  );
+
+CREATE POLICY "Users can delete their own files"
+  ON storage.objects
+  FOR DELETE
+  USING (
+    bucket_id IN ('attachments', 'avatars')
+    AND (
+      CASE
+        WHEN bucket_id = 'attachments' THEN
+          EXISTS (
+            SELECT 1 FROM file_metadata
+            WHERE file_metadata.file_path = name
+            AND file_metadata.uploaded_by = auth.uid()
+          )
+        WHEN bucket_id = 'avatars' THEN
+          -- Users can only delete their own avatar
+          (regexp_split_to_array(name, '/'))[1] = auth.uid()::text
+        ELSE
+          false
+      END
+    )
+  );

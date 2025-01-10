@@ -26,10 +26,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <Toaster />
           <Surface className="min-h-screen">
             {children}
           </Surface>
-          <Toaster />
         </ThemeProvider>
       </body>
     </html>

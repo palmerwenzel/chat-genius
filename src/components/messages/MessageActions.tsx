@@ -1,60 +1,225 @@
 import * as React from "react";
-import { Button } from "@/components/ui/button";
-import { MessageSquare, Smile, MoreHorizontal } from "lucide-react";
+import { Smile, Trash, Pencil, Reply, GitMerge } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+} from "@/components/ui/context-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "@/stores/auth";
+import { supabase } from "@/lib/supabase";
+import { ThreadSidebar } from "@/components/threads/ThreadSidebar";
 
 interface MessageActionsProps {
   messageId: string;
-  hasThread?: boolean;
   replyCount?: number;
-  onThreadClick?: () => void;
-  onReactionClick?: () => void;
+  content: string;
+  author: {
+    name: string;
+    avatar?: string;
+  };
+  timestamp: string;
+  children: React.ReactNode;
+  isThreadOpen?: boolean;
+  onThreadOpen?: () => void;
+  onThreadClose?: () => void;
+  onReply?: (replyTo: { id: string; content: string; author: string }) => void;
+  onEdit?: () => void;
+  channelId: string;
 }
+
+const commonEmojis = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "✨"];
 
 export function MessageActions({
   messageId,
-  hasThread,
   replyCount = 0,
-  onThreadClick,
-  onReactionClick,
+  content,
+  author,
+  timestamp,
+  children,
+  isThreadOpen = false,
+  onThreadOpen = () => {},
+  onThreadClose = () => {},
+  onReply,
+  onEdit,
+  channelId,
 }: MessageActionsProps) {
+  const { user } = useAuth();
+
+  const handleReaction = React.useCallback(async (emoji: string) => {
+    if (!user) return;
+    
+    try {
+      const { data: existingReaction } = await supabase
+        .from('reactions')
+        .select('id')
+        .eq('message_id', messageId)
+        .eq('user_id', user.id)
+        .eq('emoji', emoji)
+        .single();
+
+      if (existingReaction) {
+        // Remove reaction if it exists
+        await supabase
+          .from('reactions')
+          .delete()
+          .eq('id', existingReaction.id);
+      } else {
+        // Add new reaction
+        await supabase
+          .from('reactions')
+          .insert({
+            message_id: messageId,
+            user_id: user.id,
+            emoji,
+          });
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Results contain 0 rows')) {
+        // No existing reaction, add new one
+        await supabase
+          .from('reactions')
+          .insert({
+            message_id: messageId,
+            user_id: user.id,
+            emoji,
+          });
+      } else {
+        console.error('Error toggling reaction:', error);
+      }
+    }
+  }, [messageId, user]);
+
+  const handleCreateThread = React.useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      // First, update any existing replies to be part of this thread
+      const { error: updateRepliesError } = await supabase
+        .from('messages')
+        .update({ thread_id: messageId })
+        .eq('replying_to_id', messageId);
+
+      if (updateRepliesError) throw updateRepliesError;
+
+      // Open the thread view immediately
+      onThreadOpen();
+    } catch (error) {
+      console.error('Error creating thread:', error);
+    }
+  }, [user, onThreadOpen, messageId]);
+
+  const handleDelete = React.useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ 
+          deleted_at: new Date().toISOString(),
+          // Optionally clear the content for privacy
+          content: '[Message deleted]'
+        })
+        .eq('id', messageId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
+  }, [messageId, user]);
+
   return (
-    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 hover:bg-accent"
-        onClick={onReactionClick}
-      >
-        <Smile className="h-4 w-4" />
-      </Button>
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger>{children}</ContextMenuTrigger>
+        <ContextMenuContent className="w-64">
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="cursor-pointer">
+              <Smile className="h-4 w-4 mr-2" />
+              Add Reaction
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="p-2">
+              <ScrollArea className="h-32">
+                <div className="grid grid-cols-8 gap-1">
+                  {commonEmojis.map((emoji) => (
+                    <button
+                      key={emoji}
+                      className="h-6 w-6 hover:bg-muted rounded flex items-center justify-center"
+                      onClick={async () => {
+                        await handleReaction(emoji);
+                        // Simulate Escape key press to close all menus
+                        document.dispatchEvent(
+                          new KeyboardEvent('keydown', {
+                            key: 'Escape',
+                            bubbles: true,
+                            cancelable: true
+                          })
+                        );
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 hover:bg-accent flex items-center gap-1"
-        onClick={onThreadClick}
-      >
-        <MessageSquare className="h-4 w-4" />
-        {replyCount > 0 && <span className="text-xs">{replyCount}</span>}
-      </Button>
+          <ContextMenuItem 
+            onClick={() => onReply?.({ id: messageId, content, author: author.name })}
+            className="cursor-pointer group"
+          >
+            <Reply className="h-4 w-4 mr-2" />
+            Reply
+          </ContextMenuItem>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-accent">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+          <ContextMenuItem 
+            onClick={handleCreateThread}
+            className="cursor-pointer group"
+          >
+            <GitMerge className="h-4 w-4 mr-2 text-primary/70 group-hover:text-primary transition-colors" />
+            Create Thread {replyCount > 0 && `(${replyCount} replies)`}
+          </ContextMenuItem>
+
+          <ContextMenuSeparator />
+          
+          <ContextMenuItem 
+            onClick={onEdit}
+            className="cursor-pointer"
+          >
+            <Pencil className="h-4 w-4 mr-2" />
+            Edit Message
+          </ContextMenuItem>
+          
+          <ContextMenuItem 
+            onClick={handleDelete}
+            className="text-red-400 cursor-pointer"
+          >
+            <Trash className="h-4 w-4 mr-2" />
+            Delete Message
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+
+      {isThreadOpen && (
+        <ThreadSidebar
+          isOpen={isThreadOpen}
+          onClose={onThreadClose}
+          threadId={messageId}
+          channelId={channelId}
+          parentMessage={{
+            id: messageId,
+            content,
+            author,
+            timestamp
+          }}
+        />
+      )}
+    </>
   );
 } 
