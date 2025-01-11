@@ -3,10 +3,11 @@
 import { LoginForm } from "@/components/auth/LoginForm";
 import { AuthDebug } from "@/components/auth/AuthDebug";
 import { useAuth } from "@/stores/auth";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+// Separate component to handle search params
+function LoginContent() {
   const { signIn, signInWithProvider, user, initialized } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -85,5 +86,18 @@ export default function LoginPage() {
       />
       <AuthDebug />
     </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 } 
