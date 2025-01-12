@@ -1,6 +1,7 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 import { realtimeManager } from '@/lib/realtime';
-import { Database } from '@/types/supabase';
+import { storageService, BUCKETS } from '@/services/storage';
 
 const supabase = createClientComponentClient<Database>();
 
@@ -9,40 +10,49 @@ type MessageInsert = Database['public']['Tables']['messages']['Insert'];
 type Reaction = Database['public']['Tables']['reactions']['Row'];
 type ReactionInsert = Database['public']['Tables']['reactions']['Insert'];
 
-interface CreateMessageData {
-  channelId: string;
-  content: string;
-  type?: 'text' | 'code';
-  threadId?: string;
+interface MessageWithReactions extends Message {
+  reactions: Reaction[];
 }
 
 interface UpdateMessageData {
   content?: string;
+  type?: 'text';
+  metadata?: {
+    files?: Array<{
+      name: string;
+      size: number;
+      type: string;
+      url: string;
+    }>;
+  };
 }
 
-interface MessageWithReactions extends Message {
-  reactions: Reaction[];
+interface CreateMessageData {
+  channelId: string;
+  content: string;
+  type?: 'text';
+  threadId?: string;
 }
 
 class MessageService {
   /**
    * Create a new message
    */
-  async createMessage(data: CreateMessageData): Promise<Message | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+  static async createMessage(data: CreateMessageData): Promise<Message | null> {
+    const user = await supabase.auth.getUser();
+    if (!user.data.user) return null;
 
-    const message: MessageInsert = {
+    const messageData: MessageInsert = {
       channel_id: data.channelId,
-      user_id: user.id,
+      sender_id: user.data.user.id,
       content: data.content,
       type: data.type || 'text',
-      parent_id: data.threadId,
+      thread_id: data.threadId
     };
 
-    const { data: newMessage, error } = await supabase
+    const { data: message, error } = await supabase
       .from('messages')
-      .insert(message)
+      .insert(messageData)
       .select()
       .single();
 
@@ -51,7 +61,7 @@ class MessageService {
       return null;
     }
 
-    return newMessage;
+    return message;
   }
 
   /**
@@ -138,20 +148,48 @@ class MessageService {
    * Delete a message (soft delete)
    */
   async deleteMessage(messageId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('messages')
-      .update({ 
-        deleted_at: new Date().toISOString(),
-        content: '[Message deleted]'
-      })
-      .eq('id', messageId);
+    try {
+      // First get the message to check for files
+      const { data: message } = await supabase
+        .from('messages')
+        .select('metadata')
+        .eq('id', messageId)
+        .single();
 
-    if (error) {
+      if (message?.metadata?.files) {
+        // Get file metadata records for this message
+        const { data: fileMetadata } = await supabase
+          .from('file_metadata')
+          .select('storage_key')
+          .eq('message_id', messageId);
+
+        // Delete files from storage and metadata
+        if (fileMetadata) {
+          await Promise.all(
+            fileMetadata.map(file => 
+              storageService.deleteFile(BUCKETS.ATTACHMENTS, file.storage_key)
+            )
+          );
+        }
+      }
+
+      // Soft delete the message
+      const { error } = await supabase
+        .from('messages')
+        .update({ 
+          deleted_at: new Date().toISOString(),
+          content: '[Message deleted]',
+          metadata: null // Clear metadata since files are deleted
+        })
+        .eq('id', messageId);
+
+      if (error) throw error;
+
+      return true;
+    } catch (error) {
       console.error('Error deleting message:', error);
       return false;
     }
-
-    return true;
   }
 
   /**

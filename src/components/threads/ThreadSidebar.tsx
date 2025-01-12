@@ -8,6 +8,7 @@ import { useAuth } from "@/stores/auth";
 import { supabase } from "@/lib/supabase";
 import { Message } from "@/components/messages/Message";
 import { Database } from "@/types/supabase";
+import { storageService } from "@/services/storage";
 
 type MessageType = Database['public']['Tables']['messages']['Row'] & {
   sender: {
@@ -15,7 +16,17 @@ type MessageType = Database['public']['Tables']['messages']['Row'] & {
     name: string;
     avatar_url: string | null;
     email: string;
-  }
+  };
+  thread_id?: string;
+  replying_to_id?: string;
+  metadata?: {
+    files?: Array<{
+      name: string;
+      size: number;
+      type: string;
+      url?: string;
+    }>;
+  };
 };
 
 interface ThreadSidebarProps {
@@ -38,6 +49,17 @@ export function ThreadSidebar({ isOpen, onClose, threadId, channelId, parentMess
   const { user } = useAuth();
   const [messages, setMessages] = React.useState<MessageType[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [replyTo, setReplyTo] = React.useState<{ id: string; content: string; author: string } | undefined>(undefined);
+  const messageInputRef = React.useRef<{ focus: () => void }>(null);
+
+  // Focus input when replying
+  React.useEffect(() => {
+    if (replyTo) {
+      requestAnimationFrame(() => {
+        messageInputRef.current?.focus();
+      });
+    }
+  }, [replyTo]);
 
   // Load thread messages
   const loadThreadMessages = React.useCallback(async () => {
@@ -72,21 +94,80 @@ export function ThreadSidebar({ isOpen, onClose, threadId, channelId, parentMess
   }, [threadId]);
 
   // Handle sending a new thread message
-  const handleSendThreadMessage = React.useCallback(async (content: string, type: 'text' | 'code' = 'text') => {
+  const handleSendThreadMessage = React.useCallback(async (
+    content: string, 
+    type: 'text' | 'code' = 'text',
+    attachments?: File[],
+    replyTo?: { id: string; content: string; author: string }
+  ) => {
     if (!threadId || !user) return;
 
     try {
-      const { error } = await supabase
+      // First create the message
+      const { data: message, error: messageError } = await supabase
         .from('messages')
         .insert({
           content,
           type,
           thread_id: threadId,
           sender_id: user.id,
-          channel_id: channelId
-        });
+          channel_id: channelId,
+          replying_to_id: replyTo?.id,
+          metadata: attachments ? { 
+            files: attachments.map(file => ({
+              name: file.name,
+              size: file.size,
+              type: file.type
+            }))
+          } : {}
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (messageError) throw messageError;
+
+      // If there are attachments, upload them
+      if (attachments?.length) {
+        const uploadedFiles = await Promise.all(
+          attachments.map(async (file) => {
+            const publicUrl = await storageService.uploadFile('attachments', file, {
+              name: file.name,
+              size: file.size,
+              mimeType: file.type,
+              channelId,
+              messageId: message.id
+            }, user.id);
+
+            if (!publicUrl) {
+              throw new Error('Failed to upload file');
+            }
+
+            return {
+              url: publicUrl,
+              type: file.type,
+              name: file.name,
+              size: file.size
+            };
+          })
+        );
+
+        // Update the message with file metadata
+        const { error: updateError } = await supabase
+          .from('messages')
+          .update({
+            metadata: {
+              files: uploadedFiles.map(file => ({
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                url: file.url
+              }))
+            }
+          })
+          .eq('id', message.id);
+
+        if (updateError) throw updateError;
+      }
     } catch (error) {
       console.error('Error sending thread message:', error);
     }
@@ -117,6 +198,14 @@ export function ThreadSidebar({ isOpen, onClose, threadId, channelId, parentMess
       subscription.unsubscribe();
     };
   }, [threadId, loadThreadMessages]);
+
+  const handleReply = React.useCallback((message: MessageType) => {
+    setReplyTo({
+      id: message.id,
+      content: message.content,
+      author: message.sender.name
+    });
+  }, []);
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
@@ -156,7 +245,15 @@ export function ThreadSidebar({ isOpen, onClose, threadId, channelId, parentMess
             ) : (
               messages.map((message) => (
                 <div key={message.id} className="py-0.5">
-                  <Message message={message} />
+                  <Message 
+                    message={message}
+                    onReply={() => handleReply(message)}
+                    isThreadMessage
+                    onScrollToMessage={(messageId) => {
+                      const element = document.getElementById(`message-${messageId}`);
+                      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }}
+                  />
                 </div>
               ))
             )}
@@ -165,9 +262,17 @@ export function ThreadSidebar({ isOpen, onClose, threadId, channelId, parentMess
 
         <div className="p-4 border-t mt-auto">
           <MessageInput 
+            ref={messageInputRef}
             placeholder="Reply to thread..."
             disabled={!threadId}
             onSend={handleSendThreadMessage}
+            replyTo={replyTo}
+            onCancelReply={() => setReplyTo(undefined)}
+            onNavigateToMessage={(messageId) => {
+              const element = document.getElementById(`message-${messageId}`);
+              element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
+            channelId={channelId}
           />
         </div>
       </SheetContent>

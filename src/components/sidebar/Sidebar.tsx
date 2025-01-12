@@ -13,9 +13,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
 import { Surface } from "../ui/surface";
-import { SearchButton } from "@/components/search/SearchButton";
 import { UserMenu } from "@/components/user/UserMenu";
 import { toast } from "@/components/ui/use-toast";
+import { navigateToChannelByName, navigateToGroup } from '@/lib/client-navigation';
 
 const supabase = createClientComponentClient<Database>();
 
@@ -221,13 +221,13 @@ export const Sidebar = ({
     setSelectedChannel(channelFromPath);
   }, [pathname]);
 
-  const handleChannelClick = useCallback((channelName: string) => {
+  const handleChannelClick = useCallback(async (channelName: string) => {
     // Immediately update UI
     setSelectedChannel(channelName);
     
-    // Navigate to the channel using the new URL structure
+    // Navigate to the channel using our navigation helper
     if (currentGroupName) {
-      router.push(`/chat/${currentGroupName}/${channelName}`);
+      await navigateToChannelByName(currentGroupName, channelName, router);
     }
   }, [router, currentGroupName]);
 
@@ -242,12 +242,14 @@ export const Sidebar = ({
             <Settings className="h-4 w-4" />
           </Button>
         </div>
+        {/*
         <div className="mt-4">
           <SearchButton 
             mode="channel" 
             placeholder="Search channels..."
           />
         </div>
+        */}
       </div>
       <Surface className="flex-1 min-h-0">
         <div className="flex h-full relative">
@@ -258,7 +260,7 @@ export const Sidebar = ({
               isGroupsExpanded 
                 ? "backdrop-blur-md bg-background/80 supports-[backdrop-filter]:bg-background/60" 
                 : "bg-background",
-              isGroupsExpanded ? "w-[280px]" : "w-[72px]"
+              isGroupsExpanded ? "w-[320px]" : "w-[72px]"
             )}
             onMouseEnter={() => setIsGroupsExpanded(true)}
             onMouseLeave={() => setIsGroupsExpanded(false)}
@@ -273,7 +275,7 @@ export const Sidebar = ({
                     <Button
                       variant="ghost"
                       className={cn(
-                        "w-full transition-all duration-200",
+                        "w-full transition-all duration-200 hover:bg-muted/30",
                         isGroupsExpanded ? "justify-start px-4" : "justify-center p-0",
                         currentGroupName === group.name && "text-primary",
                         group.role === 'none' && "opacity-75"
@@ -309,9 +311,9 @@ export const Sidebar = ({
 
                         // Navigate to first available channel or group page
                         if (firstChannel) {
-                          router.push(`/chat/${group.name}/${firstChannel.name}`);
+                          await navigateToChannelByName(group.name, firstChannel.name, router);
                         } else {
-                          router.push(`/chat/${group.name}`);
+                          await navigateToGroup(group.name, router);
                         }
                       }}
                     >
@@ -343,7 +345,7 @@ export const Sidebar = ({
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full transition-all duration-200",
+                    "w-full transition-all duration-200 hover:bg-muted/30",
                     isGroupsExpanded ? "justify-start px-4" : "justify-center p-0"
                   )}
                   onClick={() => setIsCreateGroupOpen(true)}

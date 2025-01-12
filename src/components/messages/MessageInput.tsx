@@ -2,8 +2,9 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Send, Code, Image, FileText, Reply, X } from "lucide-react";
+import { Plus, Send, Image, FileText, Reply, X } from "lucide-react";
 import { FileUpload } from "./FileUpload";
+import { presenceService } from '@/services/presence';
 
 interface MessageInputProps {
   onSend?: (content: string, type: 'text' | 'code', attachments?: File[], replyTo?: { id: string; content: string; author: string }) => void;
@@ -19,6 +20,7 @@ interface MessageInputProps {
   initialContent?: string;
   initialType?: 'text' | 'code';
   onCancel?: () => void;
+  channelId?: string;
 }
 
 export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInputProps>(({ 
@@ -30,7 +32,8 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
   onNavigateToMessage,
   initialContent = '',
   initialType = 'text',
-  onCancel
+  onCancel,
+  channelId
 }, ref) => {
   const [content, setContent] = React.useState(initialContent);
   const [isCode, setIsCode] = React.useState(initialType === 'code');
@@ -43,6 +46,25 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
     setContent(initialContent);
     setIsCode(initialType === 'code');
   }, [initialContent, initialType]);
+
+  // Handle typing status
+  React.useEffect(() => {
+    if (!channelId) return;
+
+    // Update typing status when content changes
+    if (content.trim()) {
+      presenceService.updateTypingStatus(channelId, true);
+    } else {
+      presenceService.updateTypingStatus(channelId, false);
+    }
+
+    // Clean up typing status when unmounting
+    return () => {
+      if (channelId) {
+        presenceService.updateTypingStatus(channelId, false);
+      }
+    };
+  }, [content, channelId]);
 
   // Expose focus method
   React.useImperativeHandle(ref, () => ({
@@ -185,15 +207,6 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
               </PopoverTrigger>
               <PopoverContent className="w-48" align="start">
                 <div className="grid gap-1">
-                  <Button
-                    variant="ghost"
-                    className="justify-start"
-                    onClick={() => setIsCode(!isCode)}
-                    disabled={disabled}
-                  >
-                    <Code className="mr-2 h-4 w-4" />
-                    {isCode ? "Switch to Text" : "Code Block"}
-                  </Button>
                   <Button 
                     variant="ghost" 
                     className="justify-start"

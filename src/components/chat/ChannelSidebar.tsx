@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
-import { PostgrestError } from '@supabase/supabase-js';
+// Temporarily commented out while queries are disabled
+// import { PostgrestError } from '@supabase/supabase-js';
 import Image from 'next/image';
 
 type Member = {
@@ -20,6 +21,8 @@ type Member = {
   custom_status?: string;
 };
 
+// Temporarily commented out while queries are disabled
+/*
 type MemberResponse = {
   user_id: string;
   role: 'owner' | 'admin' | 'member';
@@ -34,6 +37,7 @@ type MemberResponse = {
     custom_status: string | null;
   } | null;
 };
+*/
 
 interface ChannelSidebarProps {
   channelId: string;
@@ -47,6 +51,8 @@ export function ChannelSidebar({ channelId, groupId, className }: ChannelSidebar
 
   useEffect(() => {
     async function loadMembers() {
+      // Temporarily commented out database queries
+      /*
       // Fetch channel members
       const { data: channelMembers, error: channelError } = await supabase
         .from('channel_members')
@@ -139,6 +145,10 @@ export function ChannelSidebar({ channelId, groupId, className }: ChannelSidebar
       });
 
       setMembers(sortedMembers);
+      */
+
+      // Set empty members array for now
+      setMembers([]);
     }
 
     loadMembers();

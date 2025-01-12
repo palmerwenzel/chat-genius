@@ -1,109 +1,82 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
+import { v4 as uuidv4 } from 'uuid';
 
 // Bucket names
-const BUCKETS = {
+export const BUCKETS = {
   ATTACHMENTS: 'attachments',
   AVATARS: 'avatars',
 } as const;
 
 type BucketName = typeof BUCKETS[keyof typeof BUCKETS];
-type FileMetadata = {
+export interface FileMetadata {
+  id: string;
+  originalName: string;
   size: number;
   mimeType: string;
-  filename: string;
-  channelId?: string;
-  groupId?: string;
-  messageId?: string;
-};
-
-// UUID validation regex
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  filePath: string;
+  uploadedBy: string;
+  createdAt: string;
+}
 
 class StorageService {
-  private supabase = createClientComponentClient<Database>();
+  private readonly supabase = createClientComponentClient<Database>();
 
   /**
    * Upload a file to a bucket
    */
   async uploadFile(
-    bucket: BucketName,
+    bucket: string,
     file: File,
-    metadata: FileMetadata,
+    metadata: {
+      name: string;
+      size: number;
+      mimeType: string;
+      channelId?: string;
+      groupId?: string;
+      messageId?: string;
+    },
     userId: string
   ): Promise<string | null> {
-    if (!metadata.channelId) throw new Error('Channel ID is required');
-    if (!metadata.groupId) throw new Error('Group ID is required');
-    if (!UUID_REGEX.test(metadata.channelId)) throw new Error('Invalid channel ID format');
-    if (!UUID_REGEX.test(metadata.groupId)) throw new Error('Invalid group ID format');
+    const storageKey = `${bucket}/${uuidv4()}-${metadata.name}`;
 
-    // Validate channel and group membership before proceeding
-    const { data: membership, error: membershipError } = await this.supabase
-      .from('channel_members')
-      .select(`
-        channel_id,
-        channels!inner (
-          group_id
-        )
-      `)
-      .eq('channel_id', metadata.channelId)
-      .eq('user_id', userId)
-      .eq('channels.group_id', metadata.groupId)
-      .single();
-
-    if (membershipError || !membership) {
-      console.error('Error checking channel membership:', membershipError);
-      throw new Error('User is not a member of this channel or group');
-    }
-
-    // Create a unique file path scoped to channel
-    const timestamp = new Date().getTime();
-    const filePath = `${metadata.groupId}/${metadata.channelId}/${timestamp}-${metadata.filename}`;
-
-    // First create metadata entry
-    const { error: metadataError } = await this.supabase
-      .from('file_metadata')
-      .insert({
-        file_path: filePath,
-        bucket,
-        size: metadata.size,
-        mime_type: metadata.mimeType,
-        original_name: metadata.filename,
-        channel_id: metadata.channelId,
-        group_id: metadata.groupId,
-        message_id: metadata.messageId,
-        uploaded_by: userId
-      });
-
-    if (metadataError) {
-      console.error('Error storing file metadata:', metadataError);
-      throw new Error(`Metadata storage failed: ${metadataError.message}`);
-    }
-
-    // Then upload the file
-    const { error: uploadError } = await this.supabase
-      .storage
+    // Upload to storage
+    const { error: uploadError } = await this.supabase.storage
       .from(bucket)
-      .upload(filePath, file, {
-        contentType: metadata.mimeType,
-        upsert: false
-      });
+      .upload(storageKey, file);
 
     if (uploadError) {
       console.error('Error uploading file:', uploadError);
-      // Clean up metadata if upload fails
-      await this.supabase
-        .from('file_metadata')
-        .delete()
-        .eq('file_path', filePath);
-      throw new Error(`Upload failed: ${uploadError.message}`);
+      return null;
     }
 
-    // Get public URL if successful
-    const { data: { publicUrl } } = this.supabase
-      .storage
+    // Create metadata record
+    const { error: metadataError } = await this.supabase
+      .from('file_metadata')
+      .insert({
+        original_name: metadata.name,
+        size: metadata.size,
+        mime_type: metadata.mimeType,
+        file_path: storageKey,
+        bucket: bucket,
+        uploaded_by: userId,
+        channel_id: metadata.channelId,
+        message_id: metadata.messageId
+      });
+
+    if (metadataError) {
+      console.error('Error creating file metadata:', metadataError);
+      // Clean up the uploaded file
+      await this.supabase.storage
+        .from(bucket)
+        .remove([storageKey]);
+      return null;
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = this.supabase.storage
       .from(bucket)
-      .getPublicUrl(filePath);
+      .getPublicUrl(storageKey);
 
     return publicUrl;
   }
@@ -111,11 +84,11 @@ class StorageService {
   /**
    * Delete a file from a bucket
    */
-  async deleteFile(bucket: BucketName, filePath: string): Promise<boolean> {
+  async deleteFile(bucket: BucketName, storageKey: string): Promise<boolean> {
     const { error } = await this.supabase
       .storage
       .from(bucket)
-      .remove([filePath]);
+      .remove([storageKey]);
 
     if (error) {
       console.error('Error deleting file:', error);
@@ -126,7 +99,7 @@ class StorageService {
     const { error: metadataError } = await this.supabase
       .from('file_metadata')
       .delete()
-      .eq('file_path', filePath);
+      .eq('storage_key', storageKey);
 
     if (metadataError) {
       console.error('Error deleting file metadata:', metadataError);
@@ -138,11 +111,11 @@ class StorageService {
   /**
    * Get file metadata
    */
-  async getFileMetadata(filePath: string): Promise<FileMetadata | null> {
+  async getFileMetadata(storageKey: string): Promise<FileMetadata | null> {
     const { data, error } = await this.supabase
       .from('file_metadata')
       .select()
-      .eq('file_path', filePath)
+      .eq('storage_key', storageKey)
       .single();
 
     if (error) {
@@ -151,12 +124,13 @@ class StorageService {
     }
 
     return {
+      id: data.id,
+      originalName: data.original_name,
       size: data.size,
       mimeType: data.mime_type,
-      filename: data.original_name,
-      channelId: data.channel_id,
-      groupId: data.group_id,
-      messageId: data.message_id,
+      filePath: data.file_path,
+      uploadedBy: data.uploaded_by,
+      createdAt: data.created_at
     };
   }
 
@@ -166,9 +140,8 @@ class StorageService {
   async getChannelAttachments(channelId: string): Promise<FileMetadata[]> {
     const { data, error } = await this.supabase
       .from('file_metadata')
-      .select()
+      .select('*')
       .eq('channel_id', channelId)
-      .eq('bucket', BUCKETS.ATTACHMENTS)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -177,12 +150,13 @@ class StorageService {
     }
 
     return data.map(item => ({
+      id: item.id,
+      originalName: item.original_name,
       size: item.size,
       mimeType: item.mime_type,
-      filename: item.original_name,
-      channelId: item.channel_id,
-      groupId: item.group_id,
-      messageId: item.message_id,
+      filePath: item.file_path,
+      uploadedBy: item.uploaded_by,
+      createdAt: item.created_at
     }));
   }
 
@@ -192,9 +166,8 @@ class StorageService {
   async getMessageAttachments(messageId: string): Promise<FileMetadata[]> {
     const { data, error } = await this.supabase
       .from('file_metadata')
-      .select()
+      .select('*')
       .eq('message_id', messageId)
-      .eq('bucket', BUCKETS.ATTACHMENTS)
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -203,12 +176,13 @@ class StorageService {
     }
 
     return data.map(item => ({
+      id: item.id,
+      originalName: item.original_name,
       size: item.size,
       mimeType: item.mime_type,
-      filename: item.original_name,
-      channelId: item.channel_id,
-      groupId: item.group_id,
-      messageId: item.message_id,
+      filePath: item.file_path,
+      uploadedBy: item.uploaded_by,
+      createdAt: item.created_at
     }));
   }
 }

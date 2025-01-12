@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { User } from '@supabase/supabase-js';
 import { auth } from '@/services/auth';
+import { presenceService } from '@/services/presence';
 
 interface AuthState {
   user: User | null;
   isLoading: boolean;
-  error: Error | null;
   initialized: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, options?: { name?: string }) => Promise<void>;
@@ -14,80 +14,53 @@ interface AuthState {
   updateProfile: (profile: { name?: string; avatar_url?: string }) => Promise<void>;
 }
 
-export const useAuth = create<AuthState>((set) => ({
+export const useAuth = create<AuthState>(() => ({
   user: null,
   isLoading: true,
-  error: null,
   initialized: false,
-
   signIn: async (email: string, password: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { user, error } = await auth.signIn(email, password);
-      if (error) throw error;
-      set({ user, isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
+    const { user, error } = await auth.signIn(email, password);
+    if (error) throw error;
+    useAuth.setState({ user });
   },
-
   signUp: async (email: string, password: string, options?: { name?: string }) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { user, error } = await auth.signUp(email, password, options);
-      if (error) throw error;
-      set({ user, isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
+    const { user, error } = await auth.signUp(email, password, options);
+    if (error) throw error;
+    useAuth.setState({ user });
   },
-
   signOut: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const { error } = await auth.signOut();
-      if (error) throw error;
-      set({ user: null, isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
+    const { error } = await auth.signOut();
+    if (error) throw error;
+    useAuth.setState({ user: null });
   },
-
   signInWithProvider: async (provider: 'github' | 'google') => {
-    set({ isLoading: true, error: null });
-    try {
-      const { error } = await auth.signInWithProvider(provider);
-      if (error) throw error;
-      // Note: Auth state change will handle setting the user
-      set({ isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
+    const { error } = await auth.signInWithProvider(provider);
+    if (error) throw error;
   },
-
   updateProfile: async (profile: { name?: string; avatar_url?: string }) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { user, error } = await auth.updateProfile(profile);
-      if (error) throw error;
-      set({ user, isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
+    const { user, error } = await auth.updateProfile(profile);
+    if (error) throw error;
+    useAuth.setState({ user });
   },
 }));
 
 // Initialize auth state
 auth.getSession().then(({ user }) => {
   useAuth.setState({ user, isLoading: false, initialized: true });
+  if (user) {
+    presenceService.initialize(user.id);
+  }
 });
 
 // Subscribe to auth changes
-auth.onAuthStateChange((user) => {
-  useAuth.setState({ user, isLoading: false });
+auth.onAuthStateChange(async (user) => {
+  useAuth.setState({ user, isLoading: false, initialized: true });
+
+  if (user) {
+    // Initialize presence tracking
+    await presenceService.initialize(user.id);
+  } else {
+    // Clean up presence tracking
+    await presenceService.cleanup();
+  }
 }); 

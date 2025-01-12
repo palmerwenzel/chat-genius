@@ -9,52 +9,131 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      channels: {
+      users: {
         Row: {
           id: string
-          created_at: string
+          email: string
           name: string
-          description: string | null
-          type: 'text' | 'voice'
-          is_public: boolean
-          owner_id: string
+          avatar_url: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          id?: string
-          created_at?: string
+          id: string
+          email: string
           name: string
-          description?: string | null
-          type?: 'text' | 'voice'
-          is_public?: boolean
-          owner_id: string
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
+          email?: string
+          name?: string
+          avatar_url?: string | null
           created_at?: string
+          updated_at?: string
+        }
+      }
+      groups: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          visibility: 'public' | 'private'
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          visibility?: 'public' | 'private'
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          visibility?: 'public' | 'private'
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      group_members: {
+        Row: {
+          group_id: string
+          user_id: string
+          role: 'owner' | 'admin' | 'member'
+          created_at: string
+        }
+        Insert: {
+          group_id: string
+          user_id: string
+          role?: 'owner' | 'admin' | 'member'
+          created_at?: string
+        }
+        Update: {
+          group_id?: string
+          user_id?: string
+          role?: 'owner' | 'admin' | 'member'
+          created_at?: string
+        }
+      }
+      channels: {
+        Row: {
+          id: string
+          group_id: string
+          name: string
+          description: string | null
+          type: 'text' | 'voice'
+          visibility: 'public' | 'private'
+          created_by: string
+          created_at: string
+          updated_at: string
+          fts: unknown
+        }
+        Insert: {
+          id?: string
+          group_id: string
+          name: string
+          description?: string | null
+          type?: 'text' | 'voice'
+          visibility?: 'public' | 'private'
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          group_id?: string
           name?: string
           description?: string | null
           type?: 'text' | 'voice'
-          is_public?: boolean
-          owner_id?: string
+          visibility?: 'public' | 'private'
+          created_by?: string
+          created_at?: string
+          updated_at?: string
         }
       }
       channel_members: {
         Row: {
-          id: string
           channel_id: string
           user_id: string
           role: 'owner' | 'admin' | 'member'
           created_at: string
         }
         Insert: {
-          id?: string
           channel_id: string
           user_id: string
           role?: 'owner' | 'admin' | 'member'
           created_at?: string
         }
         Update: {
-          id?: string
           channel_id?: string
           user_id?: string
           role?: 'owner' | 'admin' | 'member'
@@ -65,40 +144,41 @@ export interface Database {
         Row: {
           id: string
           channel_id: string
-          user_id: string
+          sender_id: string
           content: string
-          type: 'text' | 'code'
+          type: 'text'
+          metadata: Json
+          replying_to_id: string | null
+          thread_id: string | null
           created_at: string
           updated_at: string | null
-          parent_id: string | null
-          is_edited: boolean
-          attachments: Json[] | null
           deleted_at: string | null
+          fts: unknown
         }
         Insert: {
           id?: string
           channel_id: string
-          user_id: string
+          sender_id: string
           content: string
-          type?: 'text' | 'code'
+          type?: 'text'
+          metadata?: Json
+          replying_to_id?: string | null
+          thread_id?: string | null
           created_at?: string
           updated_at?: string | null
-          parent_id?: string | null
-          is_edited?: boolean
-          attachments?: Json[] | null
           deleted_at?: string | null
         }
         Update: {
           id?: string
           channel_id?: string
-          user_id?: string
+          sender_id?: string
           content?: string
-          type?: 'text' | 'code'
+          type?: 'text'
+          metadata?: Json
+          replying_to_id?: string | null
+          thread_id?: string | null
           created_at?: string
           updated_at?: string | null
-          parent_id?: string | null
-          is_edited?: boolean
-          attachments?: Json[] | null
           deleted_at?: string | null
         }
       }
@@ -125,33 +205,50 @@ export interface Database {
           created_at?: string
         }
       }
-      profiles: {
+      file_metadata: {
         Row: {
           id: string
+          name: string
+          size: number
+          mime_type: string
+          storage_key: string
+          created_by: string
           created_at: string
-          username: string
-          full_name: string | null
-          avatar_url: string | null
-          status: 'online' | 'offline' | 'away' | 'dnd'
-          updated_at: string | null
         }
         Insert: {
-          id: string
+          id?: string
+          name: string
+          size: number
+          mime_type: string
+          storage_key: string
+          created_by: string
           created_at?: string
-          username: string
-          full_name?: string | null
-          avatar_url?: string | null
-          status?: 'online' | 'offline' | 'away' | 'dnd'
-          updated_at?: string | null
         }
         Update: {
           id?: string
+          name?: string
+          size?: number
+          mime_type?: string
+          storage_key?: string
+          created_by?: string
           created_at?: string
-          username?: string
-          full_name?: string | null
-          avatar_url?: string | null
-          status?: 'online' | 'offline' | 'away' | 'dnd'
-          updated_at?: string | null
+        }
+      }
+      presence: {
+        Row: {
+          user_id: string
+          status: 'online' | 'offline' | 'idle' | 'dnd'
+          last_seen: string
+        }
+        Insert: {
+          user_id: string
+          status?: 'online' | 'offline' | 'idle' | 'dnd'
+          last_seen?: string
+        }
+        Update: {
+          user_id?: string
+          status?: 'online' | 'offline' | 'idle' | 'dnd'
+          last_seen?: string
         }
       }
     }

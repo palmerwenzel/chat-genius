@@ -33,6 +33,7 @@ interface MessageActionsProps {
   channelId: string;
   threadId?: string;
   senderId: string;
+  isThreadMessage?: boolean;
 }
 
 const commonEmojis = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "✨"];
@@ -52,6 +53,7 @@ export function MessageActions({
   channelId,
   threadId,
   senderId,
+  isThreadMessage = false,
 }: MessageActionsProps) {
   const { user } = useAuth();
   const [userRole, setUserRole] = React.useState<string | null>(null);
@@ -208,7 +210,7 @@ export function MessageActions({
             Reply
           </ContextMenuItem>
 
-          {!threadId && (
+          {!threadId && !isThreadMessage && (
             <ContextMenuItem 
               onClick={handleCreateThread}
               className="cursor-pointer group"
@@ -246,7 +248,7 @@ export function MessageActions({
         </ContextMenuContent>
       </ContextMenu>
 
-      {isThreadOpen && (
+      {isThreadOpen && !isThreadMessage && (
         <ThreadSidebar
           isOpen={isThreadOpen}
           onClose={onThreadClose}

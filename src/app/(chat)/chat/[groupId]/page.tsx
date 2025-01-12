@@ -1,5 +1,6 @@
 import { createServerSupabase } from "@/lib/server-supabase";
 import { notFound, redirect } from "next/navigation";
+import { redirectToChannel } from "@/lib/navigation";
 
 type Props = {
   params: {
@@ -73,7 +74,7 @@ export default async function GroupPage({ params }: Props) {
 
   // If there's a channel available and user is a member, redirect to it
   if (channels && channels.length > 0 && channels[0].channel_members?.some(m => m.user_id === session.user.id)) {
-    redirect(`/chat/${params.groupId}/${channels[0].name}`);
+    redirectToChannel(params.groupId, channels[0].name);
   }
 
   // Otherwise show the "no channels" view

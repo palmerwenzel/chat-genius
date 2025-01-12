@@ -134,7 +134,7 @@ export default async function ChannelPage({ params, searchParams = {} }: {
           <ChatInterface
             channelId={channel.id}
             groupId={group.id}
-            title={`${group.name} / #${channel.name}`}
+            title={`#${channel.name}`}
             subtitle={channel.description}
           >
             <MessageList channelId={channel.id}>

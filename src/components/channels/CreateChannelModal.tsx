@@ -14,6 +14,7 @@ import type { Database } from '@/types/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
+import { navigateToChannelByName } from '@/lib/client-navigation';
 
 const supabase = createClientComponentClient<Database>();
 
@@ -102,8 +103,8 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
       onOpenChange(false);
       form.reset();
       
-      // Navigate to the new channel
-      router.push(`/chat/${groupName}/${data.name}`);
+      // Navigate to the new channel using our navigation helper
+      await navigateToChannelByName(groupName, data.name, router);
     } catch (error) {
       console.error('Error creating channel:', error);
       toast({

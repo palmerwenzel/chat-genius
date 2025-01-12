@@ -3,7 +3,9 @@ import { Database } from '@/types/supabase';
 
 const supabase = createClientComponentClient<Database>();
 
-export type Message = Database['public']['Tables']['messages']['Row'];
+export type Message = Database['public']['Tables']['messages']['Row'] & {
+  channel?: Channel;
+};
 export type Channel = Database['public']['Tables']['channels']['Row'];
 
 export interface SearchResult {
@@ -13,10 +15,51 @@ export interface SearchResult {
   score: number;
 }
 
+// Helper functions for channel name/id conversion
+export async function getChannelById(channelId: string): Promise<Channel | null> {
+  const { data } = await supabase
+    .from('channels')
+    .select('*')
+    .eq('id', channelId)
+    .single();
+  return data;
+}
+
+export async function getChannelByName(groupId: string, channelName: string): Promise<Channel | null> {
+  const { data } = await supabase
+    .from('channels')
+    .select('*')
+    .eq('group_id', groupId)
+    .eq('name', channelName)
+    .single();
+  return data;
+}
+
+// Cache for channel data to avoid repeated lookups
+const channelCache = new Map<string, Channel>();
+
+export async function enrichChannelData(item: Message | Channel): Promise<Message | Channel> {
+  if ('channel_id' in item) {
+    // It's a message, enrich with channel data
+    if (!channelCache.has(item.channel_id)) {
+      const channel = await getChannelById(item.channel_id);
+      if (channel) {
+        channelCache.set(channel.id, channel);
+      }
+    }
+    return {
+      ...item,
+      channel: channelCache.get(item.channel_id)
+    };
+  }
+  return item;
+}
+
 export interface SearchOptions {
   limit?: number;
   offset?: number;
   channelId?: string;
+  groupId?: string;
   userId?: string;
   type?: 'message' | 'channel';
   startDate?: Date;
@@ -40,6 +83,7 @@ class SearchService {
       limit = this.DEFAULT_LIMIT,
       offset = 0,
       channelId,
+      groupId,
       userId,
       type,
       startDate,
@@ -59,12 +103,15 @@ class SearchService {
 
     let messageQuery = supabase
       .from('messages')
-      .select('*, channel:channels(*)', { count: 'exact' })
+      .select('*, channel:channels!inner(*)', { count: 'exact' })
       .textSearch('fts', messageSearchTerms);
 
     // Apply message filters
     if (channelId) {
       messageQuery = messageQuery.eq('channel_id', channelId);
+    } else if (groupId) {
+      // If no specific channel but group is specified, filter messages by channels in the group
+      messageQuery = messageQuery.eq('channel.group_id', groupId);
     }
     if (userId) {
       messageQuery = messageQuery.eq('sender_id', userId);
@@ -83,6 +130,9 @@ class SearchService {
       .textSearch('fts', channelSearchTerms);
 
     // Apply channel filters
+    if (groupId) {
+      channelQuery = channelQuery.eq('group_id', groupId);
+    }
     if (userId) {
       channelQuery = channelQuery.eq('created_by', userId);
     }

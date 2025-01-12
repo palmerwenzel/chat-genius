@@ -16,6 +16,12 @@ import { MessageInput } from '@/components/messages/MessageInput';
 
 const supabase = createClientComponentClient<Database>();
 
+interface Reaction {
+  emoji: string;
+  count: number;
+  users: string[];
+}
+
 type MessageType = Database['public']['Tables']['messages']['Row'] & {
   sender: {
     id: string;
@@ -26,29 +32,24 @@ type MessageType = Database['public']['Tables']['messages']['Row'] & {
   thread_id?: string;
   replying_to_id?: string;
   metadata?: {
-    isFileUpload?: boolean;
-    attachments?: Array<{
-      url: string;
-      type: string;
+    files?: Array<{
       name: string;
       size: number;
+      type: string;
+      url?: string;
     }>;
   };
 };
-
-interface Reaction {
-  emoji: string;
-  count: number;
-  users: string[];
-}
 
 interface MessageProps {
   message: MessageType;
   isBeingRepliedTo?: boolean;
   onScrollToMessage?: (messageId: string) => void;
+  onReply?: (message: MessageType) => void;
+  isThreadMessage?: boolean;
 }
 
-export function Message({ message, isBeingRepliedTo, onScrollToMessage }: MessageProps) {
+export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply, isThreadMessage }: MessageProps) {
   const { setReplyTo } = useChatContext();
   const { user } = useAuth();
   const [reactions, setReactions] = useState<Reaction[]>([]);
@@ -262,53 +263,37 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
     }
   }, [message.id, user]);
 
+  // Load reactions
+  const loadReactions = useCallback(async () => {
+    const { data: dbReactions } = await supabase
+      .from('reactions')
+      .select('*')
+      .eq('message_id', message.id);
+
+    if (dbReactions) {
+      // Group reactions by emoji
+      const groupedReactions = dbReactions.reduce((acc, reaction) => {
+        const existing = acc.find((r: Reaction) => r.emoji === reaction.emoji);
+        if (existing) {
+          existing.users.push(reaction.user_id);
+          existing.count++;
+        } else {
+          acc.push({
+            emoji: reaction.emoji,
+            count: 1,
+            users: [reaction.user_id]
+          });
+        }
+        return acc;
+      }, [] as Reaction[]);
+
+      setReactions(groupedReactions);
+    }
+  }, [message.id]);
+
   // Load and subscribe to reactions
   useEffect(() => {
     let mounted = true;
-
-    // Load initial reactions
-    const loadReactions = async () => {
-      console.log('Loading reactions for message:', message.id);
-      const { data } = await supabase
-        .from('reactions')
-        .select('emoji, user_id')
-        .eq('message_id', message.id);
-
-      console.log('Raw reaction data:', data);
-
-      if (mounted && data) {
-        // Group reactions by emoji
-        const reactionGroups = data.reduce((acc, { emoji, user_id }) => {
-          const existing = acc.find(r => r.emoji === emoji);
-          if (existing) {
-            if (!existing.users.includes(user_id)) {
-              existing.users.push(user_id);
-              existing.count++;
-              console.log(`Incremented count for ${emoji}, new count:`, existing.count);
-            }
-          } else {
-            acc.push({ emoji, count: 1, users: [user_id] });
-            console.log(`Added new reaction for ${emoji}`);
-          }
-          return acc;
-        }, [] as Reaction[]);
-
-        // Sort reactions by count (most popular first)
-        const validReactions = reactionGroups
-          .filter(reaction => {
-            const isValid = reaction.count > 0;
-            console.log(`Reaction ${reaction.emoji}: count=${reaction.count}, valid=${isValid}`);
-            return isValid;
-          })
-          .sort((a, b) => b.count - a.count);
-
-        console.log('Final processed reactions:', validReactions);
-        setReactions(validReactions);
-      } else {
-        console.log('No reactions found or component unmounted');
-        setReactions([]);
-      }
-    };
 
     loadReactions();
 
@@ -320,64 +305,10 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
         schema: 'public',
         table: 'reactions',
         filter: `message_id=eq.${message.id}`
-      }, async (payload) => {
-        console.log('Reaction change detected:', payload);
-        
-        if (payload.eventType === 'DELETE' && payload.old) {
-          console.log('Processing delete event:', payload.old);
-          // For deletes, immediately update the local state
-          setReactions(prev => {
-            console.log('Current reactions:', prev);
-            const emoji = payload.old.emoji;
-            const userId = payload.old.user_id;
-            
-            // First update the counts
-            const updatedReactions = prev.map(reaction => {
-              if (reaction.emoji === emoji) {
-                // Remove user and decrement count
-                const users = reaction.users.filter(id => id !== userId);
-                console.log(`Removing user ${userId} from ${emoji}, new users:`, users);
-                return {
-                  ...reaction,
-                  users,
-                  count: users.length
-                };
-              }
-              return reaction;
-            });
-            
-            // Then filter out any reactions with zero count
-            const finalReactions = updatedReactions.filter(reaction => reaction.count > 0);
-            console.log('Updated reactions:', finalReactions);
-            return finalReactions;
-          });
-        } else if (payload.eventType === 'INSERT' && payload.new) {
-          // For inserts, immediately update the local state
-          setReactions(prev => {
-            const emoji = payload.new.emoji;
-            const userId = payload.new.user_id;
-            
-            const existing = prev.find(r => r.emoji === emoji);
-            if (existing) {
-              return prev.map(reaction => {
-                if (reaction.emoji === emoji && !reaction.users.includes(userId)) {
-                  return {
-                    ...reaction,
-                    users: [...reaction.users, userId],
-                    count: reaction.count + 1
-                  };
-                }
-                return reaction;
-              });
-            } else {
-              return [...prev, { emoji, count: 1, users: [userId] }];
-            }
-          });
+      }, () => {
+        if (mounted) {
+          loadReactions();
         }
-
-        // Always do a full reload after a short delay to ensure consistency
-        await new Promise(resolve => setTimeout(resolve, 100));
-        loadReactions();
       })
       .subscribe();
 
@@ -385,12 +316,24 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [message.id]);
+  }, [message.id, loadReactions]);
 
   const handleThreadClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering the context menu
     setIsThreadOpen(true);
   }, []);
+
+  const handleReply = useCallback(() => {
+    if (onReply) {
+      onReply(message);
+    } else {
+      setReplyTo({
+        id: message.id,
+        content: message.content,
+        author: message.sender.name
+      });
+    }
+  }, [message.id, message.content, message.sender.name, setReplyTo, onReply]);
 
   return (
     <>
@@ -406,10 +349,12 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
         isThreadOpen={isThreadOpen}
         onThreadOpen={() => setIsThreadOpen(true)}
         onThreadClose={() => setIsThreadOpen(false)}
-        onReply={(replyTo) => setReplyTo(replyTo)}
-        onEdit={() => user?.id === message.sender.id && setIsEditing(true)}
-        channelId={message.channel_id}
+        onEdit={() => setIsEditing(true)}
+        onReply={handleReply}
         threadId={message.thread_id}
+        senderId={message.sender_id}
+        channelId={message.channel_id}
+        isThreadMessage={isThreadMessage}
       >
         <div className="flex flex-col gap-1">
           {parentMessage && (
@@ -462,17 +407,17 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage }: Messag
                 <>
                   <div className={`
                     rounded-lg w-fit
-                    ${message.type === 'code' ? 'bg-muted font-mono' : 'bg-secondary/70 text-foreground p-3'}
+                    ${message.type === 'text' ? 'bg-secondary/70 text-foreground p-3' : ''}
                   `}>
                     <MessageContent 
                       content={message.content} 
-                      type={message.type || 'text'} 
-                      attachments={message.metadata?.attachments}
+                      type="text"
+                      metadata={message.metadata}
                     />
                   </div>
 
                   {/* Link Previews */}
-                  {urls.length > 0 && message.type !== 'code' && (
+                  {urls.length > 0 && (
                     <div className="space-y-2 mt-2">
                       {urls.map((url) => (
                         <LinkPreview key={url} url={url} />

@@ -1,5 +1,6 @@
 import { createServerSupabase } from "@/lib/server-supabase";
 import { redirect } from "next/navigation";
+import { redirectToGroup } from "@/lib/navigation";
 
 export default async function ChatPage() {
   const supabase = await createServerSupabase();
@@ -27,7 +28,7 @@ export default async function ChatPage() {
 
   // If user has any groups, redirect to the first one
   if (groups && groups.length > 0) {
-    redirect(`/chat/${groups[0].name}`);
+    redirectToGroup(groups[0].name);
   }
 
   return (
