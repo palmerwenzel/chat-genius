@@ -9,15 +9,25 @@ const requiredEnvVars = {
   localAnonKey: process.env.NEXT_PUBLIC_SUPABASE_LOCAL_ANON_KEY,
 };
 
-// Validate environment variables
-Object.entries(requiredEnvVars).forEach(([key, value]) => {
-  if (!value) {
-    console.warn(`Missing environment variable: ${key}`);
-  }
-});
-
 // Use local supabase if running in development and LOCAL_SUPABASE is true
 const useLocal = process.env.NEXT_PUBLIC_USE_LOCAL_SUPABASE === 'true' && process.env.NODE_ENV === 'development';
+
+// Validate environment variables
+if (process.env.NODE_ENV === 'development') {
+  // In development, warn about all missing variables
+  Object.entries(requiredEnvVars).forEach(([key, value]) => {
+    if (!value) {
+      console.warn(`Missing environment variable: ${key}`);
+    }
+  });
+} else {
+  // In production, only warn about non-local variables
+  ['url', 'anonKey'].forEach((key) => {
+    if (!requiredEnvVars[key as keyof typeof requiredEnvVars]) {
+      console.warn(`Missing required environment variable: ${key}`);
+    }
+  });
+}
 
 const finalUrl = useLocal ? (requiredEnvVars.localUrl || 'http://127.0.0.1:54321') : requiredEnvVars.url;
 const finalKey = useLocal ? (requiredEnvVars.localAnonKey || '') : requiredEnvVars.anonKey;

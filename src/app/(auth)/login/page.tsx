@@ -28,12 +28,21 @@ function LoginContent() {
 
   // Handle redirect after successful auth
   useEffect(() => {
-    // Only redirect if auth is initialized and we have a user
-    if (initialized && user) {
-      const redirectTo = searchParams.get('redirect') || '/chat';
-      console.log('Redirecting authenticated user to:', redirectTo);
-      router.push(redirectTo);
+    if (!initialized) {
+      console.log('Auth not yet initialized, waiting...');
+      return;
     }
+    
+    if (!user) {
+      console.log('No user found, staying on login page');
+      return;
+    }
+
+    const redirectTo = searchParams.get('redirect') || '/chat';
+    console.log('Auth initialized and user found, redirecting to:', redirectTo);
+    
+    // Use replace instead of push to prevent back button from returning to login
+    router.replace(redirectTo);
   }, [user, router, searchParams, initialized]);
 
   const handleSubmit = async (email: string, password: string) => {
