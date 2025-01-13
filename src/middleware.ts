@@ -7,36 +7,31 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient<Database>({ req, res })
 
-  // Check if this is a protected route
-  const isProtectedRoute = req.nextUrl.pathname.startsWith('/chat')
-    || req.nextUrl.pathname.startsWith('/api/search')
-    || req.nextUrl.pathname.startsWith('/api/messages');
+  // Extract the user via getUser (revalidates token).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (isProtectedRoute) {
-    // Get session
-    const { data: { session } } = await supabase.auth.getSession()
-    
-    if (!session?.user) {
-      return NextResponse.redirect(new URL('/login', req.url))
-    }
+  const isLoginRoute = req.nextUrl.pathname.startsWith('/login')
 
-    // Verify user exists in database
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', session.user.id)
-      .single();
-
-    if (error || !user) {
-      // Clear auth cookies and redirect to login
-      await supabase.auth.signOut()
-      return NextResponse.redirect(new URL('/login', req.url))
-    }
-  } else {
-    // For non-protected routes, just refresh the session
-    await supabase.auth.getSession()
+  // If user is found and this is the login page, send them to /chat instead.
+  if (user && isLoginRoute) {
+    return NextResponse.redirect(new URL('/chat', req.url))
   }
 
+  // Check if this route needs protection. 
+  // Adjust to cover all routes that should only be accessible if authed.
+  const isProtectedRoute =
+    req.nextUrl.pathname.startsWith('/chat') ||
+    req.nextUrl.pathname.startsWith('/api/search') ||
+    req.nextUrl.pathname.startsWith('/api/messages')
+
+  // For protected routes, if there is no user, redirect to /login.
+  if (isProtectedRoute && !user) {
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
+
+  // If neither condition triggers, allow request through.
   return res
 }
 

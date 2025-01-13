@@ -12,6 +12,6 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // URL to redirect to after sign in process completes
+  // Make sure to redirect them to /chat now that they are presumably authed.
   return NextResponse.redirect(new URL(next, requestUrl.origin));
 } 
