@@ -28,7 +28,11 @@ export function UserMenu({ expanded = true }: UserMenuProps) {
       <div 
         role="button" 
         className="focus:outline-none cursor-pointer w-full"
-        onClick={() => setIsMenuOpen(true)}
+        onClick={(e) => {
+          if (!(e.target as HTMLElement).closest('.status-selector')) {
+            setIsMenuOpen(true);
+          }
+        }}
       >
         <div className={cn(
           "flex items-center gap-2 p-2 rounded-lg hover:bg-accent transition-colors w-full",
@@ -44,13 +48,7 @@ export function UserMenu({ expanded = true }: UserMenuProps) {
                 </AvatarFallback>
               )}
             </Avatar>
-            <div 
-              className="absolute -bottom-0.5 -right-0.5"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsMenuOpen(false);
-              }}
-            >
+            <div className="absolute -bottom-0.5 -right-0.5 status-selector">
               <StatusSelector size="md" />
             </div>
           </div>

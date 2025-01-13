@@ -333,7 +333,7 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
         author: message.sender.name
       });
     }
-  }, [message.id, message.content, message.sender.name, setReplyTo, onReply]);
+  }, [message, setReplyTo, onReply]);
 
   return (
     <>

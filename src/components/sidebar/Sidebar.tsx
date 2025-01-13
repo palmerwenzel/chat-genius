@@ -71,15 +71,57 @@ export const Sidebar = ({
     }
 
     try {
-      const { data: channelsData, error } = await supabase
-        .from('channels')
-        .select('*')
-        .eq('group_id', currentGroup.id)
-        .order('name');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
 
-      if (error) throw error;
+      // Get both member channels and public channels
+      const [memberResponse, publicResponse] = await Promise.all([
+        // Get channels where user is a member
+        supabase
+          .from('channels')
+          .select(`
+            id,
+            name,
+            visibility,
+            channel_members!inner (
+              user_id
+            )
+          `)
+          .eq('group_id', currentGroup.id)
+          .eq('channel_members.user_id', session.user.id),
+        
+        // Get public channels
+        supabase
+          .from('channels')
+          .select(`
+            id,
+            name,
+            visibility
+          `)
+          .eq('group_id', currentGroup.id)
+          .eq('visibility', 'public')
+      ]);
 
-      setChannels(channelsData || []);
+      if (memberResponse.error) throw memberResponse.error;
+      if (publicResponse.error) throw publicResponse.error;
+
+      // Combine and deduplicate channels
+      const allChannels = [...(memberResponse.data || [])].map(channel => ({
+        id: channel.id,
+        name: channel.name,
+        visibility: channel.visibility
+      }));
+      
+      (publicResponse.data || []).forEach(publicChannel => {
+        if (!allChannels.some(c => c.id === publicChannel.id)) {
+          allChannels.push(publicChannel);
+        }
+      });
+
+      // Sort by name
+      allChannels.sort((a, b) => a.name.localeCompare(b.name));
+
+      setChannels(allChannels);
     } catch (error) {
       console.error('Error loading channels:', error);
       toast({

@@ -18,8 +18,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 import { useAuth } from "@/stores/auth";
+import { presenceService } from "@/services/presence";
 
 export type Status = 'online' | 'idle' | 'dnd' | 'offline';
 
@@ -55,6 +57,7 @@ export function StatusSelector({ className, size = 'md' }: StatusSelectorProps) 
   const { user } = useAuth();
   const [currentStatus, setCurrentStatus] = React.useState<Status>('online');
   const [isOpen, setIsOpen] = React.useState(false);
+  const supabase = createClientComponentClient<Database>();
 
   // Fetch initial status
   React.useEffect(() => {
@@ -93,26 +96,23 @@ export function StatusSelector({ className, size = 'md' }: StatusSelectorProps) 
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      channel.unsubscribe();
     };
-  }, [user]);
+  }, [user, supabase]);
 
   const updateStatus = async (status: Status) => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('presence')
-        .update({ 
-          status,
-          last_active: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', user.id);
-
-      if (error) throw error;
+      // Update local state immediately for better UX
+      setCurrentStatus(status);
+      
+      // Use the presence service to update status
+      await presenceService.updateStatus(status);
     } catch (error) {
       console.error('Error updating status:', error);
+      // Revert on error
+      setCurrentStatus(currentStatus);
     }
   };
 
@@ -128,12 +128,13 @@ export function StatusSelector({ className, size = 'md' }: StatusSelectorProps) 
     <TooltipProvider>
       <TooltipPrimitive.Root>
         <TooltipTrigger asChild>
-          <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+          <DropdownMenu open={isOpen} onOpenChange={setIsOpen} modal>
             <DropdownMenuTrigger asChild>
               <div 
                 role="button" 
                 className={cn("focus:outline-none cursor-pointer", className)}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   setIsOpen(!isOpen);
                 }}
@@ -149,12 +150,21 @@ export function StatusSelector({ className, size = 'md' }: StatusSelectorProps) 
             </DropdownMenuTrigger>
             <DropdownMenuContent 
               align="end"
-              onClick={(e) => e.stopPropagation()}
+              onCloseAutoFocus={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onInteractOutside={(e) => {
+                e.preventDefault();
+                setIsOpen(false);
+              }}
+              onEscapeKeyDown={() => setIsOpen(false)}
             >
               {(Object.keys(statusConfig) as Status[]).map((status) => (
                 <DropdownMenuItem
                   key={status}
-                  onClick={(e) => {
+                  onSelect={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     updateStatus(status);
                     setIsOpen(false);

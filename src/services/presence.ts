@@ -1,15 +1,12 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
-import { debounce } from 'lodash';
 
 export type PresenceStatus = 'online' | 'offline' | 'idle' | 'dnd';
 
 class PresenceService {
   private supabase = createClientComponentClient<Database>();
-  private activityTimeout: number = 5 * 60 * 1000; // 5 minutes
-  private idleTimer: NodeJS.Timeout | null = null;
-  private lastActivity: number = Date.now();
   private userId: string | null = null;
+  private userSetStatus: PresenceStatus | null = null;
 
   /**
    * Initialize presence tracking for a user
@@ -17,16 +14,12 @@ class PresenceService {
   async initialize(userId: string) {
     this.userId = userId;
 
-    // Set initial online status
-    await this.updateStatus('online');
+    // Check if user has an existing status
+    const currentStatus = await this.getCurrentStatus();
+    this.userSetStatus = currentStatus;
 
-    // Set up activity listeners
-    this.setupActivityTracking();
-
-    // Set up page visibility tracking
+    // Set up visibility tracking
     this.setupVisibilityTracking();
-
-    // Set up beforeunload tracking
     this.setupBeforeUnload();
   }
 
@@ -37,6 +30,9 @@ class PresenceService {
     if (!this.userId) return;
 
     try {
+      // Store the user-set status
+      this.userSetStatus = status;
+
       const { error } = await this.supabase
         .from('presence')
         .update({ 
@@ -52,9 +48,28 @@ class PresenceService {
   }
 
   /**
+   * Set up visibility tracking
+   */
+  private setupVisibilityTracking() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        // Only update status if user hasn't set a custom status
+        if (!this.userSetStatus || this.userSetStatus === 'offline') {
+          this.updateStatus('online');
+        }
+      } else {
+        // Only set to offline if user was previously online
+        if (this.userSetStatus === 'online') {
+          this.updateStatus('offline');
+        }
+      }
+    });
+  }
+
+  /**
    * Update user's typing status in a channel
    */
-  updateTypingStatus = debounce(async (channelId: string, isTyping: boolean) => {
+  updateTypingStatus = async (channelId: string, isTyping: boolean) => {
     if (!this.userId) return;
 
     try {
@@ -71,51 +86,7 @@ class PresenceService {
     } catch (error) {
       console.error('Error updating typing status:', error);
     }
-  }, 500);
-
-  /**
-   * Set up activity tracking
-   */
-  private setupActivityTracking() {
-    const updateActivity = () => {
-      this.lastActivity = Date.now();
-      
-      // Clear existing timer
-      if (this.idleTimer) {
-        clearTimeout(this.idleTimer);
-      }
-
-      // Set new timer
-      this.idleTimer = setTimeout(async () => {
-        const currentStatus = await this.getCurrentStatus();
-        if (currentStatus === 'online') {
-          await this.updateStatus('idle');
-        }
-      }, this.activityTimeout);
-    };
-
-    // Track user activity
-    window.addEventListener('mousemove', updateActivity);
-    window.addEventListener('keypress', updateActivity);
-    window.addEventListener('click', updateActivity);
-    window.addEventListener('scroll', updateActivity);
-  }
-
-  /**
-   * Set up page visibility tracking
-   */
-  private setupVisibilityTracking() {
-    document.addEventListener('visibilitychange', async () => {
-      if (document.hidden) {
-        const currentStatus = await this.getCurrentStatus();
-        if (currentStatus === 'online') {
-          await this.updateStatus('idle');
-        }
-      } else {
-        await this.updateStatus('online');
-      }
-    });
-  }
+  };
 
   /**
    * Set up beforeunload tracking
@@ -129,7 +100,7 @@ class PresenceService {
   /**
    * Get current user status
    */
-  private async getCurrentStatus(): Promise<PresenceStatus> {
+  async getCurrentStatus(): Promise<PresenceStatus> {
     if (!this.userId) return 'offline';
 
     const { data } = await this.supabase
@@ -145,12 +116,9 @@ class PresenceService {
    * Clean up presence tracking
    */
   async cleanup() {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-    }
-
     if (this.userId) {
       await this.updateStatus('offline');
+      this.userSetStatus = null;
     }
   }
 }

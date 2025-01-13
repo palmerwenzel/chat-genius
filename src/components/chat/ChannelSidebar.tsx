@@ -7,37 +7,41 @@ import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
-// Temporarily commented out while queries are disabled
-// import { PostgrestError } from '@supabase/supabase-js';
 import Image from 'next/image';
+import { useAuth } from '@/stores/auth';
+import { StatusSelector } from '@/components/presence/StatusSelector';
 
-type Member = {
+type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline';
+
+type PresenceRecord = {
+  status: PresenceStatus;
+  custom_status: string | null;
+  last_active: string;
+};
+
+type UserRecord = {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+  presence: PresenceRecord[];
+};
+
+type MemberRecord = {
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  users: UserRecord;
+};
+
+interface Member {
   id: string;
   name: string;
   email: string;
   avatar_url: string | null;
   role: 'owner' | 'admin' | 'member';
-  status: 'online' | 'idle' | 'dnd' | 'offline';
-  custom_status?: string;
-};
-
-// Temporarily commented out while queries are disabled
-/*
-type MemberResponse = {
-  user_id: string;
-  role: 'owner' | 'admin' | 'member';
-  users: {
-    id: string;
-    name: string;
-    email: string;
-    avatar_url: string | null;
-  };
-  presence: {
-    status: 'online' | 'idle' | 'dnd' | 'offline';
-    custom_status: string | null;
-  } | null;
-};
-*/
+  status: PresenceStatus;
+  custom_status?: string | null;
+}
 
 interface ChannelSidebarProps {
   channelId: string;
@@ -48,85 +52,146 @@ interface ChannelSidebarProps {
 export function ChannelSidebar({ channelId, groupId, className }: ChannelSidebarProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const supabase = createClientComponentClient<Database>();
+  const { user } = useAuth();
 
   useEffect(() => {
     async function loadMembers() {
-      // Temporarily commented out database queries
-      /*
-      // Fetch channel members
+      // First check if the group is public
+      const { data: groupData, error: groupError } = await supabase
+        .from('groups')
+        .select('visibility')
+        .eq('id', groupId)
+        .single();
+
+      if (groupError) {
+        console.error('Error loading group:', groupError);
+        return;
+      }
+
+      const isPublicGroup = groupData?.visibility === 'public';
+      console.log('Group visibility:', groupData?.visibility);
+
+      // For public groups, get all users who have interacted with any channel in the group
+      let allGroupMembers: MemberRecord[] = [];
+      
+      if (isPublicGroup) {
+        // First get all presence records to ensure we have the latest status
+        const { data: presenceData } = await supabase
+          .from('presence')
+          .select('*');
+
+        console.log('Current presence data:', presenceData);
+
+        const { data: activeUsers, error: activeUsersError } = await supabase
+          .from('users')
+          .select(`
+            id,
+            name,
+            email,
+            avatar_url,
+            presence!left (
+              status,
+              custom_status,
+              last_active
+            )
+          `)
+          .order('name');
+
+        console.log('Active users data:', activeUsers);
+
+        if (activeUsersError) {
+          console.error('Error loading active users:', activeUsersError);
+          return;
+        }
+
+        if (activeUsers) {
+          allGroupMembers = activeUsers.map(user => ({
+            user_id: user.id,
+            role: 'member' as const,
+            users: user as UserRecord
+          }));
+        }
+      } else {
+        // For private groups, get explicit group members
+        const { data: members, error: membersError } = await supabase
+          .from('group_members')
+          .select(`
+            user_id,
+            role,
+            users!inner (
+              id,
+              name,
+              email,
+              avatar_url,
+              presence!left (
+                status,
+                custom_status,
+                last_active
+              )
+            )
+          `)
+          .eq('group_id', groupId);
+
+        console.log('Private group members data:', members);
+
+        if (membersError) {
+          console.error('Error loading group members:', membersError);
+          return;
+        }
+
+        if (members) {
+          allGroupMembers = members as unknown as MemberRecord[];
+        }
+      }
+
+      // Get channel members to determine roles and filter non-channel members
       const { data: channelMembers, error: channelError } = await supabase
         .from('channel_members')
         .select(`
           user_id,
           role,
-          users (
+          users!inner (
             id,
             name,
             email,
-            avatar_url
-          ),
-          presence!left (
-            status,
-            custom_status
+            avatar_url,
+            presence!left (
+              status,
+              custom_status,
+              last_active
+            )
           )
         `)
-        .eq('channel_id', channelId) as { data: MemberResponse[] | null; error: PostgrestError | null };
+        .eq('channel_id', channelId);
+
+      console.log('Channel members data:', channelMembers);
 
       if (channelError) {
         console.error('Error loading channel members:', channelError);
         return;
       }
 
-      if (!channelMembers) return;
+      // Create a map of channel member roles
+      const channelMemberRoles = new Map(
+        channelMembers?.map(m => [m.user_id, m.role]) || []
+      );
 
-      // Fetch group members who aren't in the channel
-      const { data: groupMembers, error: groupError } = await supabase
-        .from('group_members')
-        .select(`
-          user_id,
-          role,
-          users (
-            id,
-            name,
-            email,
-            avatar_url
-          ),
-          presence!left (
-            status,
-            custom_status
-          )
-        `)
-        .eq('group_id', groupId)
-        .not('user_id', 'in', `(${channelMembers.map(m => m.user_id).join(',')})`) as { data: MemberResponse[] | null; error: PostgrestError | null };
-
-      if (groupError) {
-        console.error('Error loading group members:', groupError);
-        return;
-      }
-
-      if (!groupMembers) return;
-
-      // Combine and format members
-      const formattedMembers = [
-        ...channelMembers.map(m => ({
+      // Format all members, using channel roles where available
+      const formattedMembers: Member[] = allGroupMembers.map(m => {
+        const member: Member = {
           id: m.users.id,
           name: m.users.name,
           email: m.users.email,
           avatar_url: m.users.avatar_url,
-          role: m.role,
-          status: m.presence?.status || 'offline',
-          custom_status: m.presence?.custom_status || undefined
-        })),
-        ...groupMembers.map(m => ({
-          id: m.users.id,
-          name: m.users.name,
-          email: m.users.email,
-          avatar_url: m.users.avatar_url,
-          role: m.role,
-          status: m.presence?.status || 'offline',
-          custom_status: m.presence?.custom_status || undefined
-        }))
-      ];
+          role: channelMemberRoles.get(m.user_id) || m.role,
+          status: (m.users.presence?.[0]?.status || 'offline') as PresenceStatus,
+          custom_status: m.users.presence?.[0]?.custom_status
+        };
+        console.log('Formatted member:', member);
+        return member;
+      });
+
+      console.log('Final formatted members:', formattedMembers);
 
       // Sort members: online first, then by role (owner > admin > member), then by name
       const sortedMembers = formattedMembers.sort((a, b) => {
@@ -135,7 +200,7 @@ export function ChannelSidebar({ channelId, groupId, className }: ChannelSidebar
         if (a.status === 'offline' && b.status !== 'offline') return 1;
 
         // Then by role
-        const roleOrder = { owner: 0, admin: 1, member: 2 };
+        const roleOrder: Record<Member['role'], number> = { owner: 0, admin: 1, member: 2 };
         if (roleOrder[a.role] !== roleOrder[b.role]) {
           return roleOrder[a.role] - roleOrder[b.role];
         }
@@ -145,32 +210,57 @@ export function ChannelSidebar({ channelId, groupId, className }: ChannelSidebar
       });
 
       setMembers(sortedMembers);
-      */
-
-      // Set empty members array for now
-      setMembers([]);
     }
 
     loadMembers();
 
-    // Subscribe to presence changes
-    const channel = supabase.channel('presence_changes')
+    // Subscribe to presence changes for all members
+    const presenceChannel = supabase.channel('presence-changes')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'presence',
+          table: 'presence'
+        },
+        (payload) => {
+          console.log('Presence change detected:', payload);
+          loadMembers();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to member changes
+    const memberChannel = supabase.channel('member-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'channel_members',
+          filter: `channel_id=eq.${channelId}`,
         },
         () => {
-          // Reload members when presence changes
+          loadMembers();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'group_members',
+          filter: `group_id=eq.${groupId}`,
+        },
+        () => {
           loadMembers();
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      presenceChannel.unsubscribe();
+      memberChannel.unsubscribe();
     };
   }, [channelId, groupId, supabase]);
 
@@ -200,43 +290,31 @@ export function ChannelSidebar({ channelId, groupId, className }: ChannelSidebar
                     member.status === 'offline' && "opacity-50"
                   )}
                 >
-                  <span
-                    className={cn(
-                      'h-2 w-2 rounded-full',
-                      member.status === 'online' && 'bg-green-500',
-                      member.status === 'idle' && 'bg-yellow-500',
-                      member.status === 'dnd' && 'bg-red-500',
-                      member.status === 'offline' && 'bg-gray-300'
-                    )}
-                  />
-                  <div className="flex items-center gap-2">
-                    {member.avatar_url ? (
-                      <Image
-                        src={member.avatar_url}
-                        alt={member.name}
-                        width={24}
-                        height={24}
-                        className="rounded-full"
-                      />
-                    ) : (
-                      <UserRound className="h-6 w-6 text-muted-foreground" />
-                    )}
-                    <div className="flex flex-col">
-                      <span className="text-sm flex items-center gap-1">
-                        {member.name}
-                        {member.role !== 'member' && (
-                          <span className="text-xs text-muted-foreground">
-                            ({member.role})
-                          </span>
-                        )}
-                      </span>
-                      {member.custom_status && (
-                        <span className="text-xs text-muted-foreground">
-                          {member.custom_status}
-                        </span>
+                  {member.id === user?.id ? (
+                    <StatusSelector size="sm" />
+                  ) : (
+                    <span
+                      className={cn(
+                        'h-2 w-2 rounded-full',
+                        member.status === 'online' && 'bg-green-500',
+                        member.status === 'idle' && 'bg-yellow-500',
+                        member.status === 'dnd' && 'bg-red-500',
+                        member.status === 'offline' && 'bg-gray-300'
                       )}
-                    </div>
-                  </div>
+                    />
+                  )}
+                  {member.avatar_url ? (
+                    <Image
+                      src={member.avatar_url}
+                      alt={member.name}
+                      width={24}
+                      height={24}
+                      className="rounded-full"
+                    />
+                  ) : (
+                    <UserRound className="h-6 w-6 text-muted-foreground" />
+                  )}
+                  <span className="text-sm">{member.name}</span>
                 </div>
               ))}
             </div>
