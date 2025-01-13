@@ -4,7 +4,7 @@ import { MessageList } from "@/components/messages/MessageList";
 import { MessagesContainer } from "@/components/messages/MessagesContainer";
 import { ChannelSidebar } from "@/components/chat/ChannelSidebar";
 import { createServerSupabase } from "@/lib/server-supabase";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ChatProvider } from "@/contexts/chat";
 
 export default async function ChannelPage({ params, searchParams = {} }: {
@@ -17,25 +17,8 @@ export default async function ChannelPage({ params, searchParams = {} }: {
   };
 }) {
   const supabase = await createServerSupabase();
-
-  // Verify auth status
+  // Middleware ensures session exists
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
-    redirect('/login');
-  }
-
-  // Verify user exists in database
-  const { data: user, error: userError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('id', session.user.id)
-    .single();
-
-  if (userError || !user) {
-    // Clear auth cookies and redirect
-    await supabase.auth.signOut();
-    redirect('/login');
-  }
 
   // Get group info and verify access
   const [{ data: memberGroup }, { data: publicGroup }] = await Promise.all([
@@ -53,7 +36,7 @@ export default async function ChannelPage({ params, searchParams = {} }: {
         )
       `)
       .eq('name', params.groupId)
-      .eq('group_members.user_id', session.user.id)
+      .eq('group_members.user_id', session!.user.id)
       .single(),
     
     // Check if it's a public group
@@ -95,7 +78,7 @@ export default async function ChannelPage({ params, searchParams = {} }: {
       `)
       .eq('name', params.channelId)
       .eq('group_id', group.id)
-      .eq('channel_members.user_id', session.user.id)
+      .eq('channel_members.user_id', session!.user.id)
       .single(),
     
     // Check if it's a public channel in this group

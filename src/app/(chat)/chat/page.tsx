@@ -1,15 +1,11 @@
 import { createServerSupabase } from "@/lib/server-supabase";
-import { redirect } from "next/navigation";
 import { redirectToGroup } from "@/lib/navigation";
 
 export default async function ChatPage() {
   const supabase = await createServerSupabase();
 
-  // Verify auth status
+  // Get session (middleware ensures it exists)
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
-    redirect('/login');
-  }
 
   // Get user's groups
   const { data: groups } = await supabase
@@ -22,7 +18,7 @@ export default async function ChatPage() {
         role
       )
     `)
-    .eq('group_members.user_id', session.user.id)
+    .eq('group_members.user_id', session!.user.id)
     .order('name')
     .limit(1);
 

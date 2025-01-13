@@ -3,11 +3,9 @@
 import { RegisterForm } from "@/components/auth/RegisterForm";
 import { useAuth } from "@/stores/auth";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
   const { signUp, signInWithProvider } = useAuth();
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -26,8 +24,7 @@ export default function RegisterPage() {
       setIsLoading(true);
       setError(null);
       await signUp(data.email, data.password, { name: data.name });
-      // After registration, redirect to verification page
-      router.push('/verify');
+      // Redirect will be handled by middleware
     } catch (err) {
       console.error('Registration error:', err);
       setError(err as Error);
@@ -41,7 +38,7 @@ export default function RegisterPage() {
       setIsLoading(true);
       setError(null);
       await signInWithProvider(provider);
-      // Note: Redirect is handled by the callback route
+      // Redirect is handled by the callback route
     } catch (err) {
       console.error('OAuth error:', err);
       setError(err as Error);

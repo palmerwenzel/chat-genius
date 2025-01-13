@@ -1,5 +1,5 @@
 import { createServerSupabase } from "@/lib/server-supabase";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { redirectToChannel } from "@/lib/navigation";
 
 type Props = {
@@ -10,12 +10,8 @@ type Props = {
 
 export default async function GroupPage({ params }: Props) {
   const supabase = await createServerSupabase();
-
-  // Verify auth status
+  // Middleware ensures session exists
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
-    redirect('/login');
-  }
 
   // Get group info and verify membership
   const [{ data: memberGroup }, { data: publicGroup }] = await Promise.all([
@@ -33,7 +29,7 @@ export default async function GroupPage({ params }: Props) {
         )
       `)
       .eq('name', params.groupId)
-      .eq('group_members.user_id', session.user.id)
+      .eq('group_members.user_id', session!.user.id)
       .single(),
     
     // Check if it's a public group
@@ -73,7 +69,7 @@ export default async function GroupPage({ params }: Props) {
     .limit(1);
 
   // If there's a channel available and user is a member, redirect to it
-  if (channels && channels.length > 0 && channels[0].channel_members?.some(m => m.user_id === session.user.id)) {
+  if (channels && channels.length > 0 && channels[0].channel_members?.some(m => m.user_id === session!.user.id)) {
     redirectToChannel(params.groupId, channels[0].name);
   }
 

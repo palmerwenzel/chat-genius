@@ -1,21 +1,8 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/stores/auth";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 export default function VerifyPage() {
-  const { user } = useAuth();
-  const router = useRouter();
-
-  // If user is already verified, redirect to chat
-  useEffect(() => {
-    if (user?.email_confirmed_at) {
-      router.push('/');
-    }
-  }, [user, router]);
-
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <Card className="w-full max-w-md">

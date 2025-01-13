@@ -4,13 +4,10 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { AuthDebug } from "@/components/auth/AuthDebug";
 import { useAuth } from "@/stores/auth";
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 
 // Separate component to handle search params
 function LoginContent() {
   const { signIn, signInWithProvider, user, initialized } = useAuth();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -26,25 +23,6 @@ function LoginContent() {
     });
   }, [initialized, user]);
 
-  // Handle redirect after successful auth
-  useEffect(() => {
-    if (!initialized) {
-      console.log('Auth not yet initialized, waiting...');
-      return;
-    }
-    
-    if (!user) {
-      console.log('No user found, staying on login page');
-      return;
-    }
-
-    const redirectTo = searchParams.get('redirect') || '/chat';
-    console.log('Auth initialized and user found, redirecting to:', redirectTo);
-    
-    // Use replace instead of push to prevent back button from returning to login
-    router.replace(redirectTo);
-  }, [user, router, searchParams, initialized]);
-
   const handleSubmit = async (email: string, password: string) => {
     try {
       setIsLoading(true);
@@ -52,7 +30,7 @@ function LoginContent() {
       console.log('Attempting sign in...');
       await signIn(email, password);
       console.log('Sign in successful');
-      // Redirect will be handled by the useEffect
+      // Redirect will be handled by middleware
     } catch (err) {
       console.error('Login error:', err);
       setError(err as Error);
