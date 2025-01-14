@@ -1,25 +1,44 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/utils/supabase/server'
 
+/**
+ * GET /api/auth/check
+ * Checks if the user is authenticated and returns their session info
+ */
 export async function GET() {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const supabase = await createServerSupabaseClient()
+    const { data: { session }, error } = await supabase.auth.getSession()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Auth check failed:', error.message)
+      return NextResponse.json(
+        { error: 'Authentication check failed' },
+        { status: 401 }
+      )
+    }
+
+    if (!session) {
+      return NextResponse.json(
+        { authenticated: false, user: null },
+        { status: 200 }
+      )
     }
 
     return NextResponse.json({
-      authenticated: !!session,
-      user: session?.user ? {
+      authenticated: true,
+      user: {
         id: session.user.id,
         email: session.user.email,
         lastSignInAt: session.user.last_sign_in_at,
-      } : null,
-    });
-  } catch {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        // Add any other needed user fields here
+      },
+    })
+  } catch (error) {
+    console.error('Unexpected error in auth check:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 } 

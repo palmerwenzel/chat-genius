@@ -9,13 +9,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '@/types/supabase';
+import { createBrowserSupabaseClient } from '@/utils/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
 
-const supabase = createClientComponentClient<Database>();
+const supabase = createBrowserSupabaseClient();
 
 const createChannelSchema = z.object({
   name: z.string()

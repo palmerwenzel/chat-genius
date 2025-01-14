@@ -1,7 +1,10 @@
+'use client';
+
 import { create } from 'zustand';
 import type { User } from '@supabase/supabase-js';
-import { auth } from '@/services/auth';
-import type { StateCreator } from 'zustand';
+import { AuthService, OAuthProvider } from '@/services/auth';
+import { createBrowserSupabaseClient } from '@/utils/supabase/client';
+import { handleSupabaseError } from '@/utils/supabase/helpers';
 
 interface AuthState {
   user: User | null;
@@ -9,88 +12,90 @@ interface AuthState {
   error: Error | null;
   initialized: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, options?: { name?: string }) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  signInWithProvider: (provider: 'github' | 'google') => Promise<void>;
-  updateProfile: (profile: { name?: string; avatar_url?: string }) => Promise<void>;
+  signInWithProvider: (provider: OAuthProvider) => Promise<void>;
 }
 
-type AuthStore = StateCreator<AuthState>;
+/**
+ * Global auth store using Zustand
+ * Manages authentication state and provides auth methods
+ */
+export const useAuth = create<AuthState>((set) => {
+  const supabase = createBrowserSupabaseClient();
+  const authService = new AuthService(supabase);
 
-export const useAuth = create<AuthState>((set) => ({
-  user: null,
-  isLoading: true,
-  error: null,
-  initialized: false,
+  return {
+    user: null,
+    isLoading: true,
+    error: null,
+    initialized: false,
 
-  signIn: async (email: string, password: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { user, error } = await auth.signIn(email, password);
-      if (error) throw error;
-      set({ user, isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
-  },
+    signIn: async (email: string, password: string) => {
+      set({ isLoading: true, error: null });
+      try {
+        await authService.signInWithEmail(email, password);
+        const session = await authService.getSession();
+        set({ user: session?.user ?? null, isLoading: false });
+      } catch (error) {
+        console.error('Sign in error:', handleSupabaseError(error));
+        set({ error: error as Error, isLoading: false });
+        throw error;
+      }
+    },
 
-  signUp: async (email: string, password: string, options?: { name?: string }) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { user, error } = await auth.signUp(email, password, options);
-      if (error) throw error;
-      set({ user, isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
-  },
+    signUp: async (email: string, password: string) => {
+      set({ isLoading: true, error: null });
+      try {
+        await authService.signUpWithEmail(email, password);
+        // Note: User needs to verify email before session is created
+        set({ isLoading: false });
+      } catch (error) {
+        console.error('Sign up error:', handleSupabaseError(error));
+        set({ error: error as Error, isLoading: false });
+        throw error;
+      }
+    },
 
-  signOut: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const { error } = await auth.signOut();
-      if (error) throw error;
-      set({ user: null, isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
-  },
+    signOut: async () => {
+      set({ isLoading: true, error: null });
+      try {
+        await authService.signOut();
+        set({ user: null, isLoading: false });
+      } catch (error) {
+        console.error('Sign out error:', handleSupabaseError(error));
+        set({ error: error as Error, isLoading: false });
+        throw error;
+      }
+    },
 
-  signInWithProvider: async (provider: 'github' | 'google') => {
-    set({ isLoading: true, error: null });
-    try {
-      const { error } = await auth.signInWithProvider(provider);
-      if (error) throw error;
-      // Note: Auth state change will handle setting the user
-      set({ isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
-  },
-
-  updateProfile: async (profile: { name?: string; avatar_url?: string }) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { user, error } = await auth.updateProfile(profile);
-      if (error) throw error;
-      set({ user, isLoading: false });
-    } catch (error) {
-      set({ error: error as Error, isLoading: false });
-      throw error;
-    }
-  },
-}));
+    signInWithProvider: async (provider: OAuthProvider) => {
+      set({ isLoading: true, error: null });
+      try {
+        await authService.signInWithProvider(provider, {
+          redirectTo: window.location.origin + '/auth/callback'
+        });
+        // Note: Auth state change will handle setting the user
+        set({ isLoading: false });
+      } catch (error) {
+        console.error('OAuth error:', handleSupabaseError(error));
+        set({ error: error as Error, isLoading: false });
+        throw error;
+      }
+    },
+  };
+});
 
 // Initialize auth state
-auth.getSession().then(({ user }) => {
-  useAuth.setState({ user, isLoading: false, initialized: true });
+const supabase = createBrowserSupabaseClient();
+const authService = new AuthService(supabase);
+
+// Get initial session
+authService.getSession().then((session) => {
+  useAuth.setState({ user: session?.user ?? null, isLoading: false, initialized: true });
 });
 
 // Subscribe to auth changes
-auth.onAuthStateChange((user) => {
-  useAuth.setState({ user, isLoading: false });
+supabase.auth.onAuthStateChange((_event, session) => {
+  useAuth.setState({ user: session?.user ?? null, isLoading: false });
 }); 

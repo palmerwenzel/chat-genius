@@ -5,6 +5,7 @@ export async function middleware(request: NextRequest) {
   return await updateSession(request)
 }
 
+// Ensure the middleware is only applied to relevant paths
 export const config = {
   matcher: [
     /*
@@ -12,8 +13,9 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
+     * - public folder
+     * - assets (images, fonts, etc)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public|assets|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

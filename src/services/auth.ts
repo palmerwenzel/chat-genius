@@ -1,87 +1,81 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { AuthError, User } from '@supabase/supabase-js';
-import type { Database } from '@/types/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { Database } from '@/types/supabase';
 
-export type AuthResponse = {
-  user: User | null;
-  error: AuthError | null;
-};
+export type OAuthProvider = 'github' | 'google';
 
-const supabase = createClientComponentClient<Database>();
+export interface OAuthOptions {
+  redirectTo?: string;
+  scopes?: string;
+}
 
-export const auth = {
-  // Get current session
-  getSession: async () => {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    return { user: session?.user ?? null, error };
-  },
+export class AuthService {
+  constructor(private supabase: SupabaseClient<Database>) {}
 
-  // Sign in with email and password
-  signIn: async (email: string, password: string): Promise<AuthResponse> => {
-    const { data: { user }, error } = await supabase.auth.signInWithPassword({
+  /**
+   * Sign in with email and password
+   * @param email User's email
+   * @param password User's password
+   * @returns The session data if successful
+   */
+  async signInWithEmail(email: string, password: string) {
+    const { error } = await this.supabase.auth.signInWithPassword({
       email,
       password,
     });
-    return { user, error };
-  },
 
-  // Sign up with email and password
-  signUp: async (email: string, password: string, options?: { name?: string }): Promise<AuthResponse> => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const next = searchParams.get('redirect') || '/chat';
+    if (error) throw error;
+  }
 
-    const { data: { user }, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${next}`,
-        data: options?.name ? { name: options.name } : undefined,
-      },
-    });
-    return { user, error };
-  },
-
-  // Sign out
-  signOut: async () => {
-    const { error } = await supabase.auth.signOut({
-      scope: 'local' // This ensures we only sign out on this device
-    });
-    return { error };
-  },
-
-  // Update user profile
-  updateProfile: async (profile: {
-    name?: string;
-    avatar_url?: string;
-  }): Promise<AuthResponse> => {
-    const { data: { user }, error } = await supabase.auth.updateUser({
-      data: profile,
-    });
-    return { user, error };
-  },
-
-  // OAuth sign in
-  signInWithProvider: async (provider: 'github' | 'google') => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const next = searchParams.get('redirect') || '/chat';
-
-    const { data, error } = await supabase.auth.signInWithOAuth({
+  /**
+   * Sign in with OAuth provider
+   * @param provider The OAuth provider to use
+   * @param options Additional OAuth options
+   */
+  async signInWithProvider(provider: OAuthProvider, options?: OAuthOptions) {
+    const { error } = await this.supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${next}`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
+        redirectTo: options?.redirectTo,
+        scopes: options?.scopes,
       },
     });
-    return { data, error };
-  },
 
-  // Subscribe to auth state changes
-  onAuthStateChange: (callback: (user: User | null) => void) => {
-    return supabase.auth.onAuthStateChange((event, session) => {
-      callback(session?.user ?? null);
+    if (error) throw error;
+  }
+
+  /**
+   * Sign up with email and password
+   * @param email User's email
+   * @param password User's password
+   * @returns The session data if successful
+   */
+  async signUpWithEmail(email: string, password: string) {
+    const { error } = await this.supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin + '/auth/callback',
+      },
     });
-  },
-}; 
+
+    if (error) throw error;
+  }
+
+  /**
+   * Sign out the current user
+   */
+  async signOut() {
+    const { error } = await this.supabase.auth.signOut();
+    if (error) throw error;
+  }
+
+  /**
+   * Get the current session
+   * @returns The current session if it exists
+   */
+  async getSession() {
+    const { data: { session }, error } = await this.supabase.auth.getSession();
+    if (error) throw error;
+    return session;
+  }
+} 

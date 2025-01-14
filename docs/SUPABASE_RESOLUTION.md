@@ -4,123 +4,213 @@ Below is a checklist of all files in the codebase that reference or interact wit
 
 ---
 
-## 1. src/utils/supabase/client.ts
+## 1. src/utils/supabase/client.ts ✅
 • Description: Creates a browser-based Supabase client using createBrowserClient().
-• Action:  
-  - Confirm that only client components import from this file.  
-  - Rename the function to something consistent like `createBrowserSupabaseClient` if needed, or keep it as is but ensure all browser-based calls rely on it.  
-  - Remove any direct references to Supabase in client components that do not use this utility.  
+• Status: COMPLETED
+  - Renamed to createBrowserSupabaseClient for clarity
+  - Added JSDoc documentation
+  - Confirmed using latest @supabase/ssr package
+  - No direct references to old function found
 
-## 2. src/utils/supabase/server.ts
+## 2. src/utils/supabase/server.ts ✅
 • Description: Creates a server-based Supabase client using createServerClient().
-• Action:  
-  - Confirm that only server components or API routes import from this file.  
-  - Rename function to something consistent (e.g. `createServerSupabaseClient`) if necessary.  
-  - Ensure all server-side code (especially RSC, API routes, etc.) depends on this file.  
+• Status: COMPLETED
+  - Renamed to createServerSupabaseClient for clarity
+  - Added comprehensive JSDoc documentation
+  - Confirmed using latest @supabase/ssr package
+  - Cookie handling implementation verified
 
-## 3. src/utils/supabase/middleware.ts
+## 3. src/utils/supabase/middleware.ts ✅
 • Description: A custom middleware function that refreshes user sessions by creating a server Supabase client.
-• Action:  
-  - Validate the logic thoroughly against the Supabase docs; confirm that the flow aligns with recommended best practices for session-based authentication.  
-  - Make sure it correctly handles cookies and only redirects unauthenticated users when needed.  
-  - Where feasible, unify with or replace any separate middleware logic in the repo so there is a single, standard approach.  
+• Status: COMPLETED
+  - Updated to use latest @supabase/ssr practices
+  - Improved cookie handling with proper typing
+  - Added redirect URL preservation
+  - Added comprehensive JSDoc documentation
+  - Expanded public routes configuration
+  - Fixed all TypeScript linting issues
 
-## 4. middleware.ts (at project root)
+## 4. middleware.ts (at project root) ✅
 • Description: Another middleware entry that calls into the code in @/utils/supabase/middleware.
-• Action:  
-  - Confirm that the `matcher` config is correct and that it seamlessly calls `updateSession`.  
-  - Review all routes to ensure the expected ones are guarded (e.g. /login, /auth, /chat, etc.).  
-  - Remove or consolidate any duplicated logic with `src/middleware.ts` if both exist.  
+• Status: COMPLETED
+  - Confirmed correct usage of updateSession utility
+  - Updated matcher config to exclude static assets and public files
+  - Consolidated route protection logic from src/middleware.ts
+  - Removed duplicate middleware implementation
 
-## 5. src/middleware.ts
+## 5. src/middleware.ts ✅
 • Description: Similar HTTP middleware for route protection or session refreshing (appears to overlap with the root-level middleware).
-• Action:  
-  - Verify which middleware file is actually used by Next.js (v13+ typically expects middleware in project root).  
-  - Remove this file or unify with the root-level `middleware.ts` if it is redundant.  
-  - Update references so that only one middleware path is in play.  
+• Status: COMPLETED
+  - Verified Next.js v13+ middleware location (root is correct)
+  - Removed duplicate file after consolidating logic
+  - All references now point to root middleware.ts
 
-## 6. src/app/api/auth/check/route.ts
+## 6. src/app/api/auth/check/route.ts ✅
 • Description: Performs an auth check using createRouteHandlerClient() and responds with session status.
-• Action:  
-  - Replace any references to direct Supabase calls with `@/utils/supabase/server` if it is a server route.  
-  - Ensure it uses the recommended `createServerSupabaseClient()` approach from the docs.  
-  - Remove any repeated logic for cookie handling (the server utility should manage that).  
+• Status: COMPLETED
+  - Replaced createRouteHandlerClient with createServerSupabaseClient
+  - Added proper error handling with logging
+  - Improved response structure and status codes
+  - Added JSDoc documentation
+  - Removed redundant cookie handling
 
-## 7. src/app/auth/callback/route.ts
+## 7. src/app/auth/callback/route.ts ✅
 • Description: Exchanges OAuth codes with Supabase and redirects user.
-• Action:  
-  - Use the new server-based client from `@/utils/supabase/server` if this route is a server route.  
-  - Double-check redirection logic adheres to Supabase docs (especially the “exchangeCodeForSession” usage).  
+• Status: COMPLETED
+  - Replaced createRouteHandlerClient with createServerSupabaseClient
+  - Added comprehensive error handling with logging
+  - Improved redirect logic with error states
+  - Added JSDoc documentation
+  - Added fallback redirects for error cases
+  - Preserved next/redirect URL functionality
 
-## 8. src/app/api/search/route.ts
+## 8. src/app/api/search/route.ts ✅
 • Description: Fetches the user session, then queries your custom search service (searchService).
-• Action:  
-  - Switch from `createRouteHandlerClient()` to a unified `createServerSupabaseClient()` if preferred.  
-  - Confirm that only server functionality is in use here (no direct client logic).  
-  - Remove any leftover references to the older client-based approach.  
+• Status: COMPLETED
+  - Replaced createRouteHandlerClient with createServerSupabaseClient
+  - Added proper TypeScript interfaces for search options
+  - Improved parameter validation and sanitization
+  - Added comprehensive error handling with logging
+  - Added request parameter limits (max limit, non-negative offset)
+  - Added date validation
+  - Removed unused imports
 
-## 9. src/lib/server-supabase.ts
+## 9. src/lib/server-supabase.ts ✅
 • Description: Creates a server component client with createServerComponentClient().
-• Action:  
-  - Merge with `@/utils/supabase/server.ts` if they both do similar tasks.  
-  - Eliminate the duplication. Only keep a single server utility with consistent naming.  
+• Status: COMPLETED
+  - Removed duplicate server utility file
+  - Updated all imports in chat layout and pages
+  - Migrated to new createServerSupabaseClient
+  - Verified functionality in server components
+  - Removed old @supabase/auth-helpers-nextjs dependency usage
 
-## 10. src/services/auth.ts
+## 10. src/services/auth.ts ✅
 • Description: Contains various methods (signIn, signUp, getSession) that create or manage Supabase sessions.
-• Action:  
-  - For server calls, use the newly centralized server utilities.  
-  - For client calls, import from `@/utils/supabase/client`.  
-  - Consider splitting purely server-side logic (like getSession checks) into a server utility so this becomes a small, client-focused service.  
+• Status: COMPLETED
+  - Migrated to new createBrowserSupabaseClient
+  - Added proper JSDoc documentation
+  - Improved TypeScript types with OAuthProvider
+  - Removed global client instance for better isolation
+  - Added clear client-side usage warnings
+  - Improved code organization and consistency
 
-## 11. src/services/search.ts
+## 11. src/services/search.ts ✅
 • Description: Uses createClientComponentClient() from `@supabase/auth-helpers-nextjs`.
-• Action:  
-  - Validate that search is only done on the client if it truly needs browser context. Otherwise, move to a server-based approach with `@/utils/supabase/server`.  
-  - Ensure any user session calls or auth checks rely on the single recommended strategy.  
+• Status: COMPLETED
+  - Migrated to createServerSupabaseClient
+  - Added proper JSDoc documentation
+  - Improved code organization
+  - Added clear server-side usage warnings
+  - Removed global client instance
+  - Improved TypeScript types and interfaces
+  - Maintained existing search functionality
 
-## 12. src/app/__tests__/auth-redirects.test.tsx
+## 12. src/app/__tests__/auth-redirects.test.tsx ✅
 • Description: Tests related to authentication flow and potentially references supabase or router mocks.
-• Action:  
-  - Make sure the tests now import any refactored client or server code from `@/utils/supabase/`.  
-  - Update stubs/mocks so they reflect the new standard approach (client vs. server).  
+• Status: COMPLETED
+  - Updated mocks to use new utilities
+  - Added auth service mocking
+  - Added Supabase client utility mocking
+  - Improved test organization
+  - Added OAuth redirect verification
+  - Maintained existing test coverage
 
-## 13. src/tests/database/rls.test.ts (and any other test files directly calling Supabase)
+## 13. src/tests/database/rls.test.ts ✅
 • Description: Tests that call supabase with admin or user clients for RLS checks.
-• Action:  
-  - Switch to the updated approach from the docs if the new server/client utilities can also be used in tests.  
-  - Validate environment variable usage remains consistent.  
-  - Make sure these test clients are created in line with Next.js+Supabase best practices.  
+• Status: COMPLETED
+  - Created new test utilities in @/utils/supabase/test.ts
+  - Added proper test client creation functions
+  - Added test user management utilities
+  - Improved test organization and readability
+  - Maintained existing test coverage
+  - Fixed linting issues
+  - Removed duplicate code
 
-## 14. Potential New Files
-• You may wish to create:  
-  - A new `@/utils/supabase/test.ts` file for test utilities if you want to keep a distinct approach for integration tests or seeding.  
-  - A `@/utils/supabase/helpers.ts` for any repeated logic that is not purely server or client but needs to be shared.  
+## 14. Potential New Files ✅
+• Description: Additional utility files needed for better organization.
+• Status: COMPLETED
+  - Created @/utils/supabase/test.ts for test utilities
+    - Added test client creation functions
+    - Added test user management
+    - Added proper TypeScript types
+  - Created @/utils/supabase/helpers.ts for shared logic
+    - Added shared database types
+    - Added error handling utilities
+    - Added common database operations
+    - Added timestamp formatting
 
-## 15. Potential Deletions
-• Delete or merge duplicative files:
-  - `src/lib/server-supabase.ts` if it duplicates `src/utils/supabase/server.ts`.  
-  - Extra middleware files so there is only one canonical `middleware.ts`.  
+## 15. Potential Deletions ✅
+• Description: Remove or merge duplicative files for cleaner codebase.
+• Status: COMPLETED
+  - Removed src/lib/server-supabase.ts (completed in Task #9)
+  - Consolidated middleware files to single root middleware.ts (completed in Tasks #4 and #5)
+  - Verified no remaining duplicate utilities
+  - Confirmed all imports updated to new locations
 
 ---
 
 ## Next Steps Summary
 
-1. Unify Server-Side Logic  
-   - Consolidate all server-based Supabase calls into `src/utils/supabase/server.ts`.  
-   - Eliminate duplicate server logic in `src/lib/server-supabase.ts`, `src/utils/supabase/middleware.ts`, or route definitions.
+### 1. Unify Server-Side Logic
+Files to check/modify:
+- [✅] src/app/(chat)/chat/[channelId]/page.tsx
+- [✅] src/app/(chat)/chat/page.tsx
+- [✅] src/app/(chat)/layout.tsx
+- [✅] src/app/api/messages/route.ts
+- [✅] src/app/api/channels/route.ts
+- [✅] src/app/api/users/route.ts
+- [✅] src/services/messages.ts
+- [✅] src/services/channels.ts
+- [✅] src/services/users.ts
 
-2. Unify Client-Side Logic  
-   - Use `src/utils/supabase/client.ts` for all client-based calls.  
-   - Make sure client components do not directly instantiate Supabase but rely on your shared utilities.
+### 2. Unify Client-Side Logic
+Files to check/modify:
+- [✅] src/components/auth/login-form.tsx
+- [✅] src/components/auth/register-form.tsx
+- [✅] src/components/channels/channel-form.tsx
+- [✅] src/components/messages/message-form.tsx
+- [✅] src/hooks/use-auth.ts
+- [✅] src/hooks/use-channel.ts
+- [✅] src/hooks/use-messages.ts
+- [✅] src/stores/auth.ts
+- [✅] src/stores/channel.ts
 
-3. Single Middleware Strategy  
-   - Remove or merge multiple `middleware.ts` files. Keep one at the root of the project with the logic from `@/utils/supabase/middleware.ts`.
+### 3. Single Middleware Strategy
+Already completed in previous tasks:
+- ✅ Consolidated to root middleware.ts
+- ✅ Removed src/middleware.ts
+- ✅ Updated all middleware imports
 
-4. Update Routes and Tests  
-   - Check every route (e.g., in `src/app/api/*`) to ensure usage of the new server utility.  
-   - Update test files to instantiate Supabase with the correct approach.
+### 4. Update Routes and Tests
+Files to check/modify:
+- [✅] src/app/api/auth/callback/route.ts
+- [✅] src/app/api/auth/check/route.ts
+- [✅] src/app/api/auth/logout/route.ts
+- [✅] src/app/api/channels/[id]/route.ts
+- [✅] src/app/api/channels/route.ts
+- [✅] src/app/api/messages/[id]/route.ts
+- [✅] src/app/api/messages/route.ts
+- [✅] src/app/api/users/[id]/route.ts
+- [✅] src/app/api/users/route.ts
+- [✅] src/tests/api/auth.test.ts
+- [✅] src/tests/api/channels.test.ts
+- [✅] src/tests/api/messages.test.ts
+- [✅] src/tests/api/users.test.ts
 
-5. Documentation  
-   - Update any references in internal docs (development and README files) to reflect the new standard usage paths for server/client.
+### 5. Documentation
+Files to check/modify:
+- [ ] README.md
+- [ ] docs/LOCAL_DEVELOPMENT.md
+- [ ] docs/ARCHITECTURE.md
+- [ ] docs/API.md
+- [ ] docs/TESTING.md
+- [ ] docs/DEPLOYMENT.md
 
-This checklist should guide your refactor to align with the official Supabase + Next.js patterns. Adjust naming and structure as needed to match your style, but aim for a single source of truth for server utilities and one for client utilities.
+Each file will be checked for:
+1. Correct imports from @/utils/supabase
+2. Proper usage of server vs client utilities
+3. Consistent error handling
+4. Type safety
+5. Documentation accuracy
+
+Would you like to start with any particular section?

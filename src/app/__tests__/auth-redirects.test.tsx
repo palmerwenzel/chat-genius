@@ -7,6 +7,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/stores/auth';
 import type { User } from '@supabase/supabase-js';
 
+// Mock the auth service
+vi.mock('@/services/auth', () => ({
+  auth: {
+    getSession: vi.fn(),
+    signInWithProvider: vi.fn(),
+  },
+}));
+
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(() => ({
@@ -14,6 +22,16 @@ vi.mock('next/navigation', () => ({
   })),
   useSearchParams: vi.fn(() => ({
     get: vi.fn(),
+  })),
+}));
+
+// Mock Supabase client utilities
+vi.mock('@/utils/supabase/client', () => ({
+  createBrowserSupabaseClient: vi.fn(() => ({
+    auth: {
+      getSession: vi.fn(),
+      signInWithOAuth: vi.fn(),
+    },
   })),
 }));
 
@@ -79,6 +97,14 @@ describe('Auth Redirects', () => {
 
       expect(googleButton).toBeInTheDocument();
       expect(githubButton).toBeInTheDocument();
+
+      // Verify the redirect is preserved in the auth service call
+      const signInButton = screen.getByRole('button', { name: /google/i });
+      await signInButton.click();
+
+      await waitFor(() => {
+        expect(mockRouter.push).not.toHaveBeenCalled(); // Should not redirect yet
+      });
     });
   });
 }); 

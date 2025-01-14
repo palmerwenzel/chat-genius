@@ -2,8 +2,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { PlusIcon } from "lucide-react";
-import Link from 'next/link';
+import { Hash, PlusIcon, Volume2 } from "lucide-react";
 
 interface Channel {
   id: string;
@@ -13,16 +12,12 @@ interface Channel {
   category?: string;
 }
 
-// Placeholder data
-const channels: Channel[] = [
-  { id: '1', name: 'general', type: 'text', category: 'General' },
-  { id: '2', name: 'random', type: 'text', category: 'General' },
-  { id: '3', name: 'development', type: 'text', category: 'Work', unread: true },
-  { id: '4', name: 'design', type: 'text', category: 'Work' },
-  { id: '5', name: 'voice-chat', type: 'voice', category: 'Voice' },
-];
+interface ChannelListProps {
+  channels: Channel[];
+  onCreateChannel?: () => void;
+}
 
-export function ChannelList() {
+export function ChannelList({ channels, onCreateChannel }: ChannelListProps) {
   const router = useRouter();
 
   // Group channels by category
@@ -36,46 +31,58 @@ export function ChannelList() {
   }, {} as Record<string, Channel[]>);
 
   const handleChannelClick = (channelName: string) => {
-    // Use router.push for instant client-side navigation
     router.push(`/chat/${channelName}`);
   };
+
+  const hasChannels = channels.length > 0;
 
   return (
     <ScrollArea className="flex-1">
       <div className="p-2">
-        <Button variant="outline" className="w-full justify-start mb-4">
+        <Button 
+          variant="outline" 
+          className="w-full justify-start mb-4"
+          onClick={onCreateChannel}
+        >
           <PlusIcon className="mr-2 h-4 w-4" />
           Create Channel
         </Button>
         
-        {Object.entries(channelsByCategory).map(([category, categoryChannels]) => (
-          <div key={category} className="mb-4">
-            <h4 className="px-2 mb-2 text-sm font-semibold text-muted-foreground">
-              {category}
-            </h4>
-            <div className="space-y-1">
-              {categoryChannels.map((channel) => (
-                <Button
-                  key={channel.id}
-                  variant="ghost"
-                  className={"w-full justify-start " + (channel.unread ? "font-semibold" : "")}
-                  onClick={() => handleChannelClick(channel.name)}
-                  // Add prefetch on hover
-                  onMouseEnter={() => {
-                    router.prefetch(`/chat/${channel.name}`);
-                  }}
-                >
-                  {channel.type === 'text' ? '#' : '🔊'}{' '}
-                  {channel.name}
-                  {channel.unread && (
-                    <div className="ml-auto h-2 w-2 rounded-full bg-primary" />
-                  )}
-                </Button>
-              ))}
-            </div>
-            <Separator className="my-2" />
+        {!hasChannels ? (
+          <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+            No channels available.
+            <br />
+            Create a channel to get started!
           </div>
-        ))}
+        ) : (
+          Object.entries(channelsByCategory).map(([category, categoryChannels]) => (
+            <div key={category} className="mb-4">
+              <h4 className="px-2 mb-2 text-sm font-semibold text-muted-foreground">
+                {category}
+              </h4>
+              <div className="space-y-1">
+                {categoryChannels.map((channel) => (
+                  <Button
+                    key={channel.id}
+                    variant="ghost"
+                    className={"w-full justify-start " + (channel.unread ? "font-semibold" : "")}
+                    onClick={() => handleChannelClick(channel.name)}
+                    onMouseEnter={() => {
+                      router.prefetch(`/chat/${channel.name}`);
+                    }}
+                  >
+                    {channel.type === 'text' ? <Hash className="h-4 w-4 mr-2" /> : <Volume2 className="h-4 w-4 mr-2" />}
+                    {channel.name}
+                    {channel.unread && (
+                      <div className="ml-auto h-2 w-2 rounded-full bg-primary" />
+                    )}
+                  </Button>
+                ))}
+              </div>
+              <Separator className="my-2" />
+            </div>
+          ))
+        )}
       </div>
     </ScrollArea>
   );
