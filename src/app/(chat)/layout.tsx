@@ -1,40 +1,28 @@
-import { Sidebar } from "@/components/sidebar/Sidebar";
-import { createServerSupabase } from "@/lib/server-supabase";
-
-interface Channel {
-  id: string;
-  name: string;
-}
+import { Sidebar } from "@/components/sidebar/SidebarNew";
+import { getSupabaseServer } from "@/lib/supabase/server";
 
 export default async function ChatLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const supabase = await createServerSupabase();
-  
+  // Fetch any data needed by the chat layout
+  const supabase = getSupabaseServer();
   const { data: channelsData } = await supabase
-    .from('channels')
-    .select('id, name')
-    .order('name')
-    .throwOnError();
+    .from("channels")
+    .select("id, name, visibility")
+    .order("name");
 
-  const channels: Channel[] = channelsData?.map(channel => ({
-    id: channel.id,
-    name: channel.name
-  })) || [];
+  const channels = channelsData ?? [];
 
   return (
     <div className="fixed inset-0 flex">
-      {/* Sidebar */}
-      <aside className="w-[var(--sidebar-width-sm)] md:w-[var(--sidebar-width)] flex-shrink-0">
+      <aside className="w-64 flex-shrink-0 border-r border-gray-300">
         <Sidebar channels={channels} />
       </aside>
-
-      {/* Main content area */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {children}
       </main>
     </div>
   );
-} 
+}

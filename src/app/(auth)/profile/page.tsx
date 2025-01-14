@@ -1,15 +1,19 @@
-import { Metadata } from "next";
-import { ProfileForm } from "@/components/profile/ProfileForm";
+import { redirect } from "next/navigation";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
 
-export const metadata: Metadata = {
-  title: "Profile - ChatGenius",
-  description: "View and edit your profile",
-};
+export default async function ProfilePage() {
+  const supabase = await getSupabaseServer();
+  const { data: { user }, error } = await supabase.auth.getUser();
 
-export default function ProfilePage() {
+  if (!user || error) {
+    return redirect("/login");
+  }
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background p-4">
-      <ProfileForm />
-    </div>
+    <main className="p-4">
+      <h1 className="text-xl font-bold mb-4">Profile</h1>
+      <p>User ID: {user.id}</p>
+      <p>Email: {user.email}</p>
+    </main>
   );
-} 
+}

@@ -1,66 +1,48 @@
 import { create } from 'zustand';
-import { User } from '@supabase/supabase-js';
-import { auth } from '@/services/auth';
-import { presenceService } from '@/services/presence';
+import type { User } from '@supabase/supabase-js';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 
 interface AuthState {
   user: User | null;
   isLoading: boolean;
-  initialized: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, options?: { name?: string }) => Promise<void>;
+  error: Error | null;
+  setUser: (user: User | null) => void;
   signOut: () => Promise<void>;
-  signInWithProvider: (provider: 'github' | 'google') => Promise<void>;
-  updateProfile: (profile: { name?: string; avatar_url?: string }) => Promise<void>;
+  initialize: () => Promise<void>;
 }
 
-export const useAuth = create<AuthState>(() => ({
-  user: null,
-  isLoading: true,
-  initialized: false,
-  signIn: async (email: string, password: string) => {
-    const { user, error } = await auth.signIn(email, password);
-    if (error) throw error;
-    useAuth.setState({ user });
-  },
-  signUp: async (email: string, password: string, options?: { name?: string }) => {
-    const { user, error } = await auth.signUp(email, password, options);
-    if (error) throw error;
-    useAuth.setState({ user });
-  },
-  signOut: async () => {
-    const { error } = await auth.signOut();
-    if (error) throw error;
-    useAuth.setState({ user: null });
-  },
-  signInWithProvider: async (provider: 'github' | 'google') => {
-    const { error } = await auth.signInWithProvider(provider);
-    if (error) throw error;
-  },
-  updateProfile: async (profile: { name?: string; avatar_url?: string }) => {
-    const { user, error } = await auth.updateProfile(profile);
-    if (error) throw error;
-    useAuth.setState({ user });
-  },
-}));
+export const useAuth = create<AuthState>((set) => {
+  const supabase = createClientComponentClient<Database>();
 
-// Initialize auth state
-auth.getSession().then(({ user }) => {
-  useAuth.setState({ user, isLoading: false, initialized: true });
-  if (user) {
-    presenceService.initialize(user.id);
-  }
-});
+  return {
+    user: null,
+    isLoading: true,
+    error: null,
+    setUser: (user) => set({ user }),
 
-// Subscribe to auth changes
-auth.onAuthStateChange(async (user) => {
-  useAuth.setState({ user, isLoading: false, initialized: true });
+    signOut: async () => {
+      try {
+        await supabase.auth.signOut();
+        set({ user: null });
+      } catch (error) {
+        set({ error: error as Error });
+      }
+    },
 
-  if (user) {
-    // Initialize presence tracking
-    await presenceService.initialize(user.id);
-  } else {
-    // Clean up presence tracking
-    await presenceService.cleanup();
-  }
+    initialize: async () => {
+      try {
+        // Get initial session
+        const { data: { user } } = await supabase.auth.getUser();
+        set({ user, isLoading: false });
+
+        // Listen for auth changes
+        supabase.auth.onAuthStateChange(async (event, session) => {
+          set({ user: session?.user ?? null });
+        });
+      } catch (error) {
+        set({ error: error as Error, isLoading: false });
+      }
+    },
+  };
 }); 

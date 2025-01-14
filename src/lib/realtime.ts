@@ -1,5 +1,5 @@
 import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { supabase } from './supabase/supabase';
 import { Database } from '@/types/supabase';
 
 type Table = keyof Database['public']['Tables'];

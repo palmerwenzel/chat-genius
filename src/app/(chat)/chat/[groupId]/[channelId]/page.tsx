@@ -1,13 +1,13 @@
 import { Suspense } from "react";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { ChannelSidebar } from "@/components/chat/ChannelSidebarNew";
 import { ChatInterface } from "@/components/chat/ChatInterface";
-import { MessageList } from "@/components/messages/MessageList";
-import { MessagesContainer } from "@/components/messages/MessagesContainer";
-import { ChannelSidebar } from "@/components/chat/ChannelSidebar";
-import { createServerSupabase } from "@/lib/server-supabase";
-import { notFound } from "next/navigation";
+import { MessageList } from "@/components/messages/message-list/client";
+import { MessagesContainer } from "@/components/messages/messages-container/client";
 import { ChatProvider } from "@/contexts/chat";
+import { notFound } from "next/navigation";
 
-export default async function ChannelPage({ params, searchParams = {} }: {
+interface Props {
   params: {
     groupId: string;
     channelId: string;
@@ -15,126 +15,147 @@ export default async function ChannelPage({ params, searchParams = {} }: {
   searchParams?: {
     message?: string;
   };
-}) {
-  const supabase = await createServerSupabase();
-  // Middleware ensures session exists
-  const { data: { session } } = await supabase.auth.getSession();
+}
 
-  // Get group info and verify access
-  const [{ data: memberGroup }, { data: publicGroup }] = await Promise.all([
-    // Check if user is a member
-    supabase
-      .from('groups')
-      .select(`
-        id,
-        name,
-        description,
-        visibility,
-        group_members!inner (
+interface PresenceData {
+  status: 'online' | 'idle' | 'dnd' | 'offline';
+  custom_status?: string | null;
+  last_active?: string;
+}
+
+interface PublicMember {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+  presence: PresenceData[];
+}
+
+interface GroupMember {
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  users: {
+    id: string;
+    name: string;
+    email: string;
+    avatar_url: string | null;
+    presence: PresenceData[];
+  };
+}
+
+interface Member {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+  role: 'owner' | 'admin' | 'member';
+  status: 'online' | 'idle' | 'dnd' | 'offline';
+  custom_status?: string | null;
+}
+
+export default async function ChannelPage({ params, searchParams = {} }: Props) {
+  const supabase = getSupabaseServer();
+
+  // Get group visibility
+  const { data: groupData } = await supabase
+    .from('groups')
+    .select('visibility, id, name, description')
+    .eq('id', params.groupId)
+    .single();
+
+  if (!groupData) return notFound();
+
+  const isPublicGroup = groupData.visibility === 'public';
+
+  // Get channel data
+  const { data: channelData } = await supabase
+    .from('channels')
+    .select('id, name, description')
+    .eq('group_id', groupData.id)
+    .eq('id', params.channelId)
+    .single();
+
+  if (!channelData) return notFound();
+
+  // Get members based on group visibility
+  const { data: members } = isPublicGroup
+    ? await supabase
+        .from('users')
+        .select(`
+          id,
+          name,
+          email,
+          avatar_url,
+          presence (
+            status,
+            custom_status,
+            last_active
+          )
+        `)
+        .order('name')
+    : await supabase
+        .from('group_members')
+        .select(`
+          user_id,
           role,
-          user_id
-        )
-      `)
-      .eq('name', params.groupId)
-      .eq('group_members.user_id', session!.user.id)
-      .single(),
-    
-    // Check if it's a public group
-    supabase
-      .from('groups')
-      .select(`
-        id,
-        name,
-        description,
-        visibility
-      `)
-      .eq('name', params.groupId)
-      .eq('visibility', 'public')
-      .single()
-  ]);
+          users!inner (
+            id,
+            name,
+            email,
+            avatar_url,
+            presence (
+              status,
+              custom_status,
+              last_active
+            )
+          )
+        `)
+        .eq('group_id', params.groupId);
 
-  const group = memberGroup || publicGroup;
+  if (!members) return notFound();
 
-  if (!group) {
-    console.error('Error fetching group: Group not found');
-    return notFound();
-  }
-
-  // Get channel info and verify it belongs to the group
-  const [{ data: memberChannel }, { data: publicChannel }] = await Promise.all([
-    // Check if user is a member of the channel
-    supabase
-      .from('channels')
-      .select(`
-        id,
-        name,
-        description,
-        visibility,
-        group_id,
-        channel_members!inner (
-          role,
-          user_id
-        )
-      `)
-      .eq('name', params.channelId)
-      .eq('group_id', group.id)
-      .eq('channel_members.user_id', session!.user.id)
-      .single(),
-    
-    // Check if it's a public channel in this group
-    supabase
-      .from('channels')
-      .select(`
-        id,
-        name,
-        description,
-        visibility,
-        group_id
-      `)
-      .eq('name', params.channelId)
-      .eq('group_id', group.id)
-      .eq('visibility', 'public')
-      .single()
-  ]);
-
-  const channel = memberChannel || publicChannel;
-
-  if (!channel) {
-    console.error('Error fetching channel: Channel not found');
-    return notFound();
-  }
-
-  // Verify channel belongs to group
-  if (channel.group_id !== group.id) {
-    console.error('Channel does not belong to group');
-    return notFound();
-  }
+  // Format members for the client component
+  const formattedMembers = (members as (PublicMember | GroupMember)[]).map(member => ({
+    id: isPublicGroup ? (member as PublicMember).id : (member as GroupMember).users.id,
+    name: isPublicGroup ? (member as PublicMember).name : (member as GroupMember).users.name,
+    email: isPublicGroup ? (member as PublicMember).email : (member as GroupMember).users.email,
+    avatar_url: isPublicGroup 
+      ? (member as PublicMember).avatar_url || null
+      : (member as GroupMember).users.avatar_url || null,
+    role: isPublicGroup 
+      ? ('member' as const) 
+      : ((member as GroupMember).role as 'owner' | 'admin' | 'member'),
+    status: (isPublicGroup 
+      ? (member as PublicMember).presence?.[0]?.status 
+      : (member as GroupMember).users.presence?.[0]?.status) || 'offline',
+    custom_status: isPublicGroup
+      ? (member as PublicMember).presence?.[0]?.custom_status || null
+      : (member as GroupMember).users.presence?.[0]?.custom_status || null
+  })) satisfies Member[];
 
   return (
     <div className="flex h-full min-h-0">
       <div className="flex-1 min-w-0">
         <ChatProvider>
           <ChatInterface
-            channelId={channel.id}
-            groupId={group.id}
-            title={`#${channel.name}`}
-            subtitle={channel.description}
+            channelId={channelData.id}
+            groupId={groupData.id}
+            title={`#${channelData.name}`}
+            subtitle={channelData.description}
           >
-            <MessageList channelId={channel.id}>
+            <MessageList channelId={channelData.id}>
               <Suspense>
-                <MessagesContainer 
-                  channelId={channel.id} 
+                <MessagesContainer
+                  channelId={channelData.id}
                   highlightMessageId={searchParams.message}
+                  initialMessages={[]}
                 />
               </Suspense>
             </MessageList>
           </ChatInterface>
         </ChatProvider>
       </div>
-      <ChannelSidebar 
-        groupId={group.id}
-        channelId={channel.id} 
-      />
+      <ChannelSidebar members={formattedMembers} channelId={params.channelId} />
     </div>
   );
-} 
+}
