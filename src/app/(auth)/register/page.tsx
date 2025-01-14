@@ -1,10 +1,10 @@
-import { Register } from "@/components/auth/register";
 import { Metadata } from "next";
+import { RegisterForm } from "@/components/auth/register";
 
 export const metadata: Metadata = {
   title: "Register - ChatGenius",
   description: "Create a new account",
-}; 
+};
 
 export default function RegisterPage({
   searchParams,
@@ -13,7 +13,7 @@ export default function RegisterPage({
 }) {
   return (
     <main className="container flex h-screen w-screen flex-col items-center justify-center">
-      <Register searchParams={searchParams} />
+      <RegisterForm searchParams={searchParams} />
     </main>
   );
 } 

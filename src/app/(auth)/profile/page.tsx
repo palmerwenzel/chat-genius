@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
 
 export default async function ProfilePage() {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (!user || error) {

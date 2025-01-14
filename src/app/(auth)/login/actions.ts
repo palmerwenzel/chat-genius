@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { logger } from '@/lib/logger';
 
 interface AuthResult<T = null> {
@@ -12,7 +12,7 @@ interface AuthResult<T = null> {
 
 export async function signInWithEmail(formData: FormData): Promise<AuthResult> {
   try {
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
 
@@ -45,7 +45,7 @@ export async function signInWithEmail(formData: FormData): Promise<AuthResult> {
 
 export async function signInWithOAuth(provider: 'github' | 'google'): Promise<AuthResult<string>> {
   try {
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     const cookieStore = await cookies();
     const origin = cookieStore.get('origin')?.value || process.env.NEXT_PUBLIC_APP_URL;
 
@@ -70,7 +70,7 @@ export async function signInWithOAuth(provider: 'github' | 'google'): Promise<Au
 
 export async function signOut(): Promise<AuthResult> {
   try {
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     const { error } = await supabase.auth.signOut();
 
     if (error) {

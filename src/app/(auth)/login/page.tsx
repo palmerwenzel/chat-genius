@@ -1,4 +1,10 @@
-import { Login } from "@/components/auth/login";
+import { Metadata } from "next";
+import { LoginForm } from "@/components/auth/login/login-form";
+
+export const metadata: Metadata = {
+  title: "Login - ChatGenius",
+  description: "Sign in to your account",
+};
 
 export default function LoginPage({
   searchParams,
@@ -7,7 +13,7 @@ export default function LoginPage({
 }) {
   return (
     <main className="container flex h-screen w-screen flex-col items-center justify-center">
-      <Login searchParams={searchParams} />
+      <LoginForm searchParams={searchParams} />
     </main>
   );
 }
