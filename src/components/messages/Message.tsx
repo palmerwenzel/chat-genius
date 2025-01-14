@@ -6,7 +6,7 @@ import { MessageActions } from '@/components/messages/MessageActions';
 import { LinkPreview } from '@/components/messages/LinkPreview';
 import { EmojiReactions } from '@/components/messages/EmojiReactions';
 import { ParentMessagePreview } from '@/components/messages/ParentMessagePreview';
-import { Reply } from 'lucide-react';
+import { Reply, Bot } from 'lucide-react';
 import { Database } from '@/types/supabase';
 import { useAuth } from '@/stores/auth';
 import { useEffect, useState, useCallback } from 'react';
@@ -38,6 +38,9 @@ type MessageType = Database['public']['Tables']['messages']['Row'] & {
       type: string;
       url?: string;
     }>;
+    is_bot?: boolean;
+    bot_number?: number;
+    is_summary?: boolean;
   };
 };
 
@@ -356,7 +359,15 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
         channelId={message.channel_id}
         isThreadMessage={isThreadMessage}
       >
-        <div className="flex flex-col gap-1">
+        <div className={`
+          relative
+          ${message.metadata?.is_bot ? 'pl-8' : ''}
+        `}>
+          {message.metadata?.is_bot && (
+            <div className="absolute left-0 top-4 bg-primary/10 p-1.5 rounded-lg">
+              <Bot className="h-4 w-4 text-primary" />
+            </div>
+          )}
           {parentMessage && (
             <ParentMessagePreview
               content={parentMessage.content}
@@ -372,17 +383,33 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
           <div className={`
             group flex items-start space-x-4 animate-fade-in rounded-lg
             ${isBeingRepliedTo ? 'bg-amber-50/10 -mx-4 px-4 py-2 border-l-2 border-amber-400' : ''}
+            ${message.metadata?.is_bot ? 'bg-primary/5' : ''}
           `}>
             <Avatar className="cursor-pointer transition-transform hover:scale-105">
               <AvatarImage src={message.sender.avatar_url || "/placeholder.svg"} />
-              <AvatarFallback>{message.sender.name?.[0]}</AvatarFallback>
+              <AvatarFallback>
+                {message.metadata?.is_bot 
+                  ? `B${message.metadata.bot_number || ''}` 
+                  : message.sender.name?.[0]
+                }
+              </AvatarFallback>
             </Avatar>
             <div className="flex flex-col items-start text-sm max-w-[80%]">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-md font-medium">{message.sender.name}</span>
+                <span className="text-md font-medium">
+                  {message.metadata?.is_bot 
+                    ? `Bot ${message.metadata.bot_number || ''}` 
+                    : message.sender.name
+                  }
+                </span>
                 <span className="text-xs text-muted-foreground">
                   {new Date(message.created_at).toLocaleString()}
                 </span>
+                {message.metadata?.is_summary && (
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    Summary
+                  </span>
+                )}
                 {threadSize > 0 && (
                   <button
                     onClick={handleThreadClick}
@@ -408,6 +435,7 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
                   <div className={`
                     rounded-lg w-fit
                     ${message.type === 'text' ? 'bg-secondary/70 text-foreground p-3' : ''}
+                    ${message.metadata?.is_bot ? 'border border-primary/20' : ''}
                   `}>
                     <MessageContent 
                       content={message.content} 

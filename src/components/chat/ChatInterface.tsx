@@ -20,6 +20,20 @@ interface ChatInterfaceProps {
   children: React.ReactNode;
 }
 
+// Helper function to parse bot commands
+function parseBotCommand(content: string): { command: string; prompt?: string } | null {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('@bot')) return null;
+
+  const parts = trimmed.split(' ');
+  if (parts.length < 2) return null;
+
+  const command = parts[1];
+  const prompt = parts.slice(2).join(' ');
+
+  return { command, prompt };
+}
+
 const supabase = createClientComponentClient<Database>();
 
 export function ChatInterface({
@@ -110,7 +124,46 @@ export function ChatInterface({
     replyTo?: { id: string; content: string; author: string }
   ) => {
     try {
-      // First create the message
+      // Check for bot commands
+      const botCommand = parseBotCommand(content);
+      if (botCommand) {
+        if (botCommand.command === 'seed' && botCommand.prompt) {
+          // Call the seed endpoint
+          const response = await fetch('/api/ai/seed', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              channelId,
+              prompt: botCommand.prompt,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to seed conversation');
+          }
+          return;
+        } else if (botCommand.command === 'summary') {
+          // Call the summary endpoint
+          const response = await fetch('/api/ai/summary', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              channelId,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to generate summary');
+          }
+          return;
+        }
+      }
+
+      // If not a bot command, proceed with normal message sending
       const { data: message, error: messageError } = await supabase
         .from('messages')
         .insert({
