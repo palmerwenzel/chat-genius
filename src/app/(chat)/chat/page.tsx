@@ -16,7 +16,7 @@ export default async function ChatPage() {
   }
 
   // Check if user is in any group. If so, redirect to the first group.
-  const { data: groups } = await supabase
+  const { data: groups, error: groupsError } = await supabase
     .from("groups")
     .select(`
       id,
@@ -30,9 +30,7 @@ export default async function ChatPage() {
     .order("name")
     .limit(1);
 
-  if (groups && groups.length > 0) {
-    // Suppose you have a utility to do the actual navigation:
-    // e.g., redirectToGroup(groups[0].name)
+  if (!groupsError && groups && groups.length > 0) {
     redirect(`/chat/${groups[0].name}`);
   }
 
@@ -45,4 +43,4 @@ export default async function ChatPage() {
       </p>
     </div>
   );
-} 
+}

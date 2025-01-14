@@ -1,13 +1,16 @@
 import { Suspense } from "react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
-import { MessageList } from "@/components/messages/MessageList";
-import { MessagesContainer } from "@/components/messages/MessagesContainer";
+import { MessageList } from "@/components/messages/message-list";
+import { MessagesContainer } from "@/components/messages/messages-container";
 import { ChannelSidebar } from "@/components/chat/ChannelSidebar";
-import { getSupabaseServer } from "@/lib/supabase/supabase-server";
+import { getSupabaseServer } from "@/app/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { ChatProvider } from "@/contexts/chat";
 
-export default async function ChannelPage({ params, searchParams = {} }: {
+export default async function ChannelPage({
+  params,
+  searchParams = {}
+}: {
   params: {
     groupId: string;
     channelId: string;
@@ -17,12 +20,18 @@ export default async function ChannelPage({ params, searchParams = {} }: {
   };
 }) {
   const supabase = await getSupabaseServer();
-  // Middleware ensures session exists
-  const { data: { session } } = await supabase.auth.getSession();
+  // Middleware ensures session exists, but we double-check for SSR
+  const {
+    data: { session },
+    error: sessionError
+  } = await supabase.auth.getSession();
 
-  // Get group info and verify access
+  if (!session?.user || sessionError) {
+    return notFound();
+  }
+
+  // Check if user is a member of the group or if it's public
   const [{ data: memberGroup }, { data: publicGroup }] = await Promise.all([
-    // Check if user is a member
     supabase
       .from('groups')
       .select(`
@@ -36,10 +45,8 @@ export default async function ChannelPage({ params, searchParams = {} }: {
         )
       `)
       .eq('name', params.groupId)
-      .eq('group_members.user_id', session!.user.id)
+      .eq('group_members.user_id', session.user.id)
       .single(),
-    
-    // Check if it's a public group
     supabase
       .from('groups')
       .select(`
@@ -54,15 +61,13 @@ export default async function ChannelPage({ params, searchParams = {} }: {
   ]);
 
   const group = memberGroup || publicGroup;
-
   if (!group) {
     console.error('Error fetching group: Group not found');
     return notFound();
   }
 
-  // Get channel info and verify it belongs to the group
+  // Check if user is a member of the channel or if it's public
   const [{ data: memberChannel }, { data: publicChannel }] = await Promise.all([
-    // Check if user is a member of the channel
     supabase
       .from('channels')
       .select(`
@@ -78,10 +83,8 @@ export default async function ChannelPage({ params, searchParams = {} }: {
       `)
       .eq('name', params.channelId)
       .eq('group_id', group.id)
-      .eq('channel_members.user_id', session!.user.id)
+      .eq('channel_members.user_id', session.user.id)
       .single(),
-    
-    // Check if it's a public channel in this group
     supabase
       .from('channels')
       .select(`
@@ -98,18 +101,18 @@ export default async function ChannelPage({ params, searchParams = {} }: {
   ]);
 
   const channel = memberChannel || publicChannel;
-
   if (!channel) {
     console.error('Error fetching channel: Channel not found');
     return notFound();
   }
 
-  // Verify channel belongs to group
   if (channel.group_id !== group.id) {
     console.error('Channel does not belong to group');
     return notFound();
   }
 
+  // The outer structure is a server component, but
+  // ChatInterface, MessagesContainer, etc. are client components.
   return (
     <div className="flex h-full min-h-0">
       <div className="flex-1 min-w-0">
@@ -122,8 +125,8 @@ export default async function ChannelPage({ params, searchParams = {} }: {
           >
             <MessageList channelId={channel.id}>
               <Suspense>
-                <MessagesContainer 
-                  channelId={channel.id} 
+                <MessagesContainer
+                  channelId={channel.id}
                   highlightMessageId={searchParams.message}
                 />
               </Suspense>
@@ -131,10 +134,7 @@ export default async function ChannelPage({ params, searchParams = {} }: {
           </ChatInterface>
         </ChatProvider>
       </div>
-      <ChannelSidebar 
-        groupId={group.id}
-        channelId={channel.id} 
-      />
+      <ChannelSidebar groupId={group.id} channelId={channel.id} />
     </div>
   );
-} 
+}

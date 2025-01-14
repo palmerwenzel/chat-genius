@@ -8,26 +8,17 @@ interface ReplyTo {
   author: string;
 }
 
-interface ChatContextType {
+export interface ChatContextType {
   replyTo: ReplyTo | null;
   setReplyTo: (replyTo: ReplyTo | null) => void;
 }
 
-const ChatContext = React.createContext<ChatContextType | null>(null);
+export const ChatContext = React.createContext<ChatContextType>({
+  replyTo: null,
+  setReplyTo: () => {},
+});
 
-export function useChatContext() {
-  const context = React.useContext(ChatContext);
-  if (!context) {
-    throw new Error('useChatContext must be used within a ChatProvider');
-  }
-  return context;
-}
-
-interface ChatProviderProps {
-  children: React.ReactNode;
-}
-
-export function ChatProvider({ children }: ChatProviderProps) {
+export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [replyTo, setReplyTo] = React.useState<ReplyTo | null>(null);
 
   return (
@@ -35,4 +26,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
       {children}
     </ChatContext.Provider>
   );
+}
+
+export function useChatContext() {
+  return React.useContext(ChatContext);
 } 
