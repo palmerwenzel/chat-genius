@@ -1,15 +1,19 @@
-import { signup } from '@/app/(auth)/login/actions';
+import { Register } from "@/components/auth/register";
+import { Metadata } from "next";
 
-export default function RegisterPage() {
+export const metadata: Metadata = {
+  title: "Register - ChatGenius",
+  description: "Create a new account",
+}; 
+
+export default function RegisterPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string };
+}) {
   return (
-    <form>
-      <label htmlFor="email">Email:</label>
-      <input id="email" name="email" type="email" required />
-
-      <label htmlFor="password">Password:</label>
-      <input id="password" name="password" type="password" required />
-
-      <button formAction={signup}>Sign Up</button>
-    </form>
+    <main className="container flex h-screen w-screen flex-col items-center justify-center">
+      <Register searchParams={searchParams} />
+    </main>
   );
-}
+} 

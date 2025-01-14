@@ -2,7 +2,9 @@
 
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const createGroupSchema = z.object({
   name: z.string()
@@ -15,13 +17,20 @@ const createGroupSchema = z.object({
 
 export type CreateGroupForm = z.infer<typeof createGroupSchema>;
 
-export async function createGroup(data: CreateGroupForm) {
+interface GroupResult<T = any> {
+  success?: boolean;
+  error?: string;
+  group?: T;
+  message?: string;
+}
+
+export async function createGroup(data: CreateGroupForm): Promise<GroupResult> {
   const supabase = getSupabaseServer();
   
   // Get current user
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return { error: 'You must be logged in to create a group.' };
+    redirect('/login');
   }
 
   try {
@@ -51,10 +60,18 @@ export async function createGroup(data: CreateGroupForm) {
       message: `${validated.name} has been created successfully.`
     };
   } catch (error) {
-    console.error('Error creating group:', error);
+    logger.error('groups.create', error);
+    
     if (error instanceof z.ZodError) {
-      return { error: 'Invalid group data provided.' };
+      return { 
+        success: false,
+        error: 'Invalid group data provided.' 
+      };
     }
-    return { error: 'Failed to create group. Please try again.' };
+    
+    return { 
+      success: false,
+      error: 'Failed to create group. Please try again.' 
+    };
   }
 } 

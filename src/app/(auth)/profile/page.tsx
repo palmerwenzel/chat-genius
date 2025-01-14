@@ -1,20 +1,19 @@
-import { getSupabaseServer } from '@/lib/supabase/supabase-server';
-import { redirect } from 'next/navigation';
+import { redirect } from "next/navigation";
+import { getSupabaseServer } from "@/lib/supabase/server";
 
 export default async function ProfilePage() {
-  const supabase = await getSupabaseServer();
+  const supabase = getSupabaseServer();
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (!user || error) {
-    return redirect('/login');
+    return redirect("/login");
   }
 
   return (
-    <main>
-      <h1>Profile</h1>
+    <main className="p-4">
+      <h1 className="text-xl font-bold mb-4">Profile</h1>
       <p>User ID: {user.id}</p>
       <p>Email: {user.email}</p>
-      {/* If you want an update form, you'd add a server action and form here */}
     </main>
   );
 }

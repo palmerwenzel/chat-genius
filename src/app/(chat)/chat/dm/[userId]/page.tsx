@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import { ChatInterface } from "@/components/chat/ChatInterface";
-import { getSupabaseServer } from "@/lib/supabase/supabase-server";
+import { ChatInterface } from "@/components/chat/ChatInterfaceNew";
 
 interface DMPageProps {
   params: {
@@ -9,37 +8,13 @@ interface DMPageProps {
 }
 
 export default async function DMPage({ params }: DMPageProps) {
-  const supabase = await getSupabaseServer();
-
-  // Validate the session
-  const {
-    data: { user },
-    error: sessionError
-  } = await supabase.auth.getUser();
-
-  if (!user || sessionError) {
-    return notFound();
-  }
-
-  // For example, fetch the user you’re DMing:
-  const { data: foundUser, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', params.userId)
-    .single();
-
-  if (!foundUser || error) {
-    return notFound();
-  }
+  // Example: fetch user data here or check if the user is valid
+  const user = null; 
+  if (!user) return notFound();
 
   return (
-    <ChatInterface
-      title={foundUser.name ?? foundUser.id}
-      subtitle="Direct messages will appear here"
-      channelId={`dm-${foundUser.id}`} // or however you track DMs
-      groupId="dm-group" // or anything else
-    >
-      {/* Put your message list or other client components */}
+    <ChatInterface title={params.userId} subtitle="Direct messages will appear here">
+      <div className="p-4">DM placeholder for {params.userId}</div>
     </ChatInterface>
   );
 }

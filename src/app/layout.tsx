@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import { ThemeProvider } from "@/providers/theme-provider";
-import { Toaster } from "@/components/ui/toaster";
-import { Surface } from "@/components/ui/surface";
+import { Inter } from 'next/font/google'
+import { cn } from '@/lib/utils'
+import { ThemeProvider } from "@/providers/theme-provider"
+import { Toaster } from '@/components/ui/toaster'
+import { Surface } from "@/components/ui/surface"
+import './globals.css'
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: "ChatGenius",
-  description: "An AI-powered chat application",
-};
+  title: 'Chat Application',
+  description: 'Real-time chat application built with Next.js and Supabase',
+}
 
 export default function RootLayout({
   children,
@@ -19,19 +20,24 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body
+        className={cn(
+          'min-h-screen bg-background font-sans antialiased',
+          inter.className
+        )}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          <Toaster />
-          <Surface className="min-h-screen">
+          <Surface>
             {children}
           </Surface>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }
