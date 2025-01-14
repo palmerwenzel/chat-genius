@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSupabaseServer } from "@/lib/supabase/server";
-import { storageService } from "@/services/storage";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
+import { uploadFile } from "@/components/storage/actions";
 
 interface SendMessageParams {
   channelId: string;
@@ -13,6 +13,8 @@ interface SendMessageParams {
   attachments?: File[];
 }
 
+// Type for file metadata stored in message.metadata.files
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface FileMetadata {
   name: string;
   size: number;
@@ -27,7 +29,7 @@ export async function sendMessage({
   replyToId,
   attachments
 }: SendMessageParams) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   
   // Get current user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -62,7 +64,7 @@ export async function sendMessage({
     if (attachments?.length) {
       const uploadedFiles = await Promise.all(
         attachments.map(async (file) => {
-          const publicUrl = await storageService.uploadFile('attachments', file, {
+          const publicUrl = await uploadFile('attachments', file, {
             name: file.name,
             size: file.size,
             mimeType: file.type,
@@ -110,7 +112,7 @@ export async function sendMessage({
 }
 
 export async function updateTypingStatus(channelId: string, isTyping: boolean) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (!user || userError) return;

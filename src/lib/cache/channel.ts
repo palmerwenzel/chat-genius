@@ -1,12 +1,13 @@
 import { unstable_cache } from 'next/cache';
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
+import { logger } from '@/lib/logger';
 import type { Database } from '@/types/supabase';
 
 type Channel = Database['public']['Tables']['channels']['Row'];
 
 export const getChannelById = unstable_cache(
-  async (channelId: string) => {
-    const supabase = getSupabaseServer();
+  async (channelId: string): Promise<Channel | null> => {
+    const supabase = await getSupabaseServer();
     const { data, error } = await supabase
       .from('channels')
       .select('*')
@@ -25,8 +26,8 @@ export const getChannelById = unstable_cache(
 );
 
 export const getChannelByName = unstable_cache(
-  async (groupId: string, channelName: string) => {
-    const supabase = getSupabaseServer();
+  async (groupId: string, channelName: string): Promise<Channel | null> => {
+    const supabase = await getSupabaseServer();
     const { data, error } = await supabase
       .from('channels')
       .select('*')
@@ -46,9 +47,9 @@ export const getChannelByName = unstable_cache(
 );
 
 // Invalidate cache when channel is updated
-export async function invalidateChannelCache(channelId: string) {
+export async function invalidateChannelCache(channelId: string): Promise<void> {
   await Promise.all([
-    unstable_cache(() => null, ['channel-by-id', channelId])(),
-    unstable_cache(() => null, ['channel-by-name', channelId])()
+    unstable_cache(async () => null, ['channel-by-id', channelId])(),
+    unstable_cache(async () => null, ['channel-by-name', channelId])()
   ]);
 } 

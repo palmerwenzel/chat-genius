@@ -1,7 +1,16 @@
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
+// Type for any valid JSON value
+type JsonValue = 
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JsonValue }
+  | JsonValue[];
+
 interface LogMetadata {
-  [key: string]: any;
+  [key: string]: JsonValue;
 }
 
 interface LogEntry {
@@ -14,24 +23,26 @@ interface LogEntry {
     message?: string;
     stack?: string;
     code?: string | number;
-    details?: any;
+    details?: JsonValue;
   };
   metadata?: LogMetadata;
 }
 
 export const logger = {
-  error: (context: string, error: any, metadata?: LogMetadata) => {
+  error: (context: string, error: unknown, metadata?: LogMetadata) => {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level: 'error',
       context,
-      message: error.message || 'An error occurred',
-      error: {
+      message: error instanceof Error ? error.message : 'An error occurred',
+      error: error instanceof Error ? {
         name: error.name,
         message: error.message,
         stack: error.stack,
-        code: error.code,
-        details: error.details
+        code: (error as { code?: string | number }).code,
+        details: (error as { details?: JsonValue }).details
+      } : {
+        message: String(error)
       },
       metadata
     };

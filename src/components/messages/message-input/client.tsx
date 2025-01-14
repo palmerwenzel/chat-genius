@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Plus, Send, Image, FileText, Reply, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { sendMessage, updateTypingStatus } from "@/app_new/(chat)/actions";
+import { sendMessage, updateTypingStatus } from "@/app/(chat)/actions";
 
 interface MessageInputProps {
   channelId: string;
@@ -142,7 +142,7 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
               />
               <label htmlFor="image-upload">
                 <Button variant="outline" className="w-full">
-                  <Image className="h-4 w-4 mr-2" />
+                  <Image className="h-4 w-4 mr-2" aria-label="Image upload icon" />
                   Upload Image
                 </Button>
               </label>

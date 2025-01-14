@@ -1,13 +1,18 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { getSupabaseClient } from '@/lib/supabase/client';
-import type { Database } from '@/lib/supabase/types';
+import { createClient } from '@/lib/supabase/supabase-client';
+import type { Database } from '@/types/supabase';
+
+type PresenceStatus = Database['public']['Tables']['presence']['Row']['status'];
+type PresenceData = Pick<Database['public']['Tables']['presence']['Row'], 'user_id' | 'status'>;
 
 interface PresenceUser {
   id: string;
-  status: string;
-  [key: string]: any;
+  status: PresenceStatus;
+  name?: string;
+  avatar_url?: string | null;
+  custom_status?: string | null;
 }
 
 export function usePresenceSubscription<T extends PresenceUser>(
@@ -16,7 +21,7 @@ export function usePresenceSubscription<T extends PresenceUser>(
   groupId?: string
 ) {
   const [members, setMembers] = useState(initialMembers);
-  const supabase = getSupabaseClient();
+  const supabase = createClient();
 
   useEffect(() => {
     // Create a channel for presence changes
@@ -63,7 +68,7 @@ export function usePresenceSubscription<T extends PresenceUser>(
         setMembers(current =>
           current.map(member => ({
             ...member,
-            status: data.find(p => p.user_id === member.id)?.status || 'offline'
+            status: (data as PresenceData[]).find(p => p.user_id === member.id)?.status || 'offline'
           }))
         );
       }

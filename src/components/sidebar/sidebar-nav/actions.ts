@@ -1,7 +1,7 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
+import type { Database } from '@/types/supabase';
 
 interface Group {
   id: string;
@@ -11,14 +11,31 @@ interface Group {
   visibility: 'public' | 'private';
 }
 
+// Used for type consistency across the application
 interface Channel {
   id: string;
   name: string;
   visibility: 'public' | 'private';
 }
 
+type DatabaseGroup = Database['public']['Tables']['groups']['Row'];
+type DatabaseChannel = Database['public']['Tables']['channels']['Row'];
+
+type GroupWithMembers = Pick<DatabaseGroup, 'id' | 'name' | 'description' | 'visibility'> & {
+  group_members?: Array<{
+    role: 'owner' | 'admin' | 'member';
+    user_id: string;
+  }>;
+};
+
+type ChannelWithMembers = Pick<DatabaseChannel, 'id' | 'name' | 'visibility'> & {
+  channel_members?: Array<{
+    user_id: string;
+  }>;
+};
+
 export async function getInitialData(userId: string) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     // Get both member groups and public groups
@@ -58,8 +75,8 @@ export async function getInitialData(userId: string) {
     if (publicGroups.error) throw publicGroups.error;
 
     // Combine and deduplicate groups
-    const allGroups = [...memberGroups.data];
-    publicGroups.data.forEach(publicGroup => {
+    const allGroups = [...(memberGroups.data as GroupWithMembers[])];
+    (publicGroups.data as GroupWithMembers[]).forEach(publicGroup => {
       if (!allGroups.some(g => g.id === publicGroup.id)) {
         allGroups.push(publicGroup);
       }
@@ -75,7 +92,7 @@ export async function getInitialData(userId: string) {
         name: group.name,
         description: group.description || undefined,
         role: membership?.role || 'none',
-        visibility: group.visibility
+        visibility: group.visibility as 'public' | 'private'
       };
     });
 
@@ -86,8 +103,8 @@ export async function getInitialData(userId: string) {
   }
 }
 
-export async function getGroupChannels(groupId: string, userId: string) {
-  const supabase = getSupabaseServer();
+export async function getGroupChannels(groupId: string, userId: string): Promise<{ channels: Channel[] }> {
+  const supabase = await getSupabaseServer();
 
   try {
     // Get both member channels and public channels
@@ -122,15 +139,19 @@ export async function getGroupChannels(groupId: string, userId: string) {
     if (publicChannels.error) throw publicChannels.error;
 
     // Combine and deduplicate channels
-    const allChannels = [...memberChannels.data].map(channel => ({
+    const allChannels = [...(memberChannels.data as ChannelWithMembers[])].map(channel => ({
       id: channel.id,
       name: channel.name,
-      visibility: channel.visibility
+      visibility: channel.visibility as 'public' | 'private'
     }));
     
-    publicChannels.data.forEach(publicChannel => {
+    (publicChannels.data as ChannelWithMembers[]).forEach(publicChannel => {
       if (!allChannels.some(c => c.id === publicChannel.id)) {
-        allChannels.push(publicChannel);
+        allChannels.push({
+          id: publicChannel.id,
+          name: publicChannel.name,
+          visibility: publicChannel.visibility as 'public' | 'private'
+        });
       }
     });
 
@@ -145,7 +166,7 @@ export async function getGroupChannels(groupId: string, userId: string) {
 }
 
 export async function getFirstAvailableChannel(groupId: string, userId: string) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     // Get first available channel (either public or user is member)

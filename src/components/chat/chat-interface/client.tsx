@@ -5,35 +5,36 @@ import { MessageInput } from "@/components/messages/message-input";
 import { useChatContext } from '@/contexts/chat';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
-import { TypingIndicator } from '@/components/presence/TypingIndicator';
+import { TypingList } from '@/components/presence/typing-indicator/typing-list';
 import { useAuth } from '@/stores/auth';
 
 interface ChatInterfaceProps {
   title: string;
   subtitle?: string;
   channelId: string;
+  /** Required for routing and future group-specific features */
+  groupId: string;
   children?: React.ReactNode;
 }
 
 const supabase = createClientComponentClient<Database>();
 
+/**
+ * Chat interface component that handles messages, typing indicators, and file uploads.
+ * Note: groupId is required for routing structure and will be used for future group-specific features.
+ */
 export function ChatInterface({
   title,
   subtitle,
   channelId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  groupId, // Required for routing structure and future features
   children,
 }: ChatInterfaceProps) {
   const { user } = useAuth();
   const context = useChatContext();
   const messageInputRef = React.useRef<{ focus: () => void }>(null);
   const [typingUsers, setTypingUsers] = React.useState<string[]>([]);
-
-  const scrollToMessage = React.useCallback((messageId: string) => {
-    const messageElement = document.getElementById(`message-${messageId}`);
-    if (messageElement) {
-      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, []);
 
   // Focus input when replying
   React.useEffect(() => {
@@ -105,7 +106,7 @@ export function ChatInterface({
         </div>
         {typingUsers.length > 0 && (
           <div className="px-6 py-2">
-            <TypingIndicator users={typingUsers} />
+            <TypingList users={typingUsers} />
           </div>
         )}
       </div>
@@ -116,7 +117,6 @@ export function ChatInterface({
           channelId={channelId}
           replyTo={context.replyTo || undefined}
           onCancelReply={() => context.setReplyTo(null)}
-          onNavigateToMessage={scrollToMessage}
         />
       </div>
     </div>

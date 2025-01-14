@@ -1,6 +1,5 @@
-import { getSupabaseServer } from '@/app/lib/supabase/server';
+import { getChannelMembers } from '@/app/(chat)/chat/[groupId]/[channelId]/actions';
 import { ChannelSidebar } from './client';
-import { getChannelMembers } from './actions';
 
 interface ChannelSidebarServerProps {
   groupId: string;

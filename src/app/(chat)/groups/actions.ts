@@ -1,10 +1,11 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import type { Database } from '@/types/supabase';
 
 const createGroupSchema = z.object({
   name: z.string()
@@ -17,7 +18,9 @@ const createGroupSchema = z.object({
 
 export type CreateGroupForm = z.infer<typeof createGroupSchema>;
 
-interface GroupResult<T = any> {
+type DatabaseGroup = Database['public']['Tables']['groups']['Row'];
+
+interface GroupResult<T = DatabaseGroup> {
   success?: boolean;
   error?: string;
   group?: T;
@@ -25,7 +28,7 @@ interface GroupResult<T = any> {
 }
 
 export async function createGroup(data: CreateGroupForm): Promise<GroupResult> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   
   // Get current user
   const { data: { user }, error: authError } = await supabase.auth.getUser();

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from 'next/font/google'
 import { cn } from '@/lib/utils'
 import { ThemeProvider } from "@/providers/theme-provider"
+import { AuthProvider } from "@/providers/auth-provider"
 import { Toaster } from '@/components/ui/toaster'
 import { Surface } from "@/components/ui/surface"
 import './globals.css'
@@ -32,10 +33,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Surface>
-            {children}
-          </Surface>
-          <Toaster />
+          <AuthProvider>
+            <Surface>
+              {children}
+            </Surface>
+            <Toaster />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
