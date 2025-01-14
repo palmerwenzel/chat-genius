@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/stores/auth";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import { ThreadSidebar } from "@/components/threads/ThreadSidebar";
 
 interface MessageActionsProps {

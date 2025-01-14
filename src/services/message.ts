@@ -1,9 +1,7 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
+import { getSupabaseClient } from '@/lib/supabase/supabase';
 import { realtimeManager } from '@/lib/realtime';
 import { storageService, BUCKETS } from '@/services/storage';
-
-const supabase = createClientComponentClient<Database>();
 
 type Message = Database['public']['Tables']['messages']['Row'];
 type MessageInsert = Database['public']['Tables']['messages']['Insert'];
@@ -39,7 +37,7 @@ class MessageService {
    * Create a new message
    */
   static async createMessage(data: CreateMessageData): Promise<Message | null> {
-    const user = await supabase.auth.getUser();
+    const user = await getSupabaseClient().auth.getUser();
     if (!user.data.user) return null;
 
     const messageData: MessageInsert = {
@@ -50,7 +48,7 @@ class MessageService {
       thread_id: data.threadId
     };
 
-    const { data: message, error } = await supabase
+    const { data: message, error } = await getSupabaseClient()
       .from('messages')
       .insert(messageData)
       .select()
@@ -72,7 +70,7 @@ class MessageService {
     limit = 50,
     before?: string
   ): Promise<MessageWithReactions[]> {
-    let query = supabase
+    let query = getSupabaseClient()
       .from('messages')
       .select('*, reactions(*)')
       .eq('channel_id', channelId)
@@ -103,7 +101,7 @@ class MessageService {
     limit = 50,
     before?: string
   ): Promise<MessageWithReactions[]> {
-    let query = supabase
+    let query = getSupabaseClient()
       .from('messages')
       .select('*, reactions(*)')
       .eq('parent_id', threadId)
@@ -129,7 +127,7 @@ class MessageService {
    * Update a message
    */
   async updateMessage(messageId: string, data: UpdateMessageData): Promise<Message | null> {
-    const { data: updatedMessage, error } = await supabase
+    const { data: updatedMessage, error } = await getSupabaseClient()
       .from('messages')
       .update(data)
       .eq('id', messageId)
@@ -150,7 +148,7 @@ class MessageService {
   async deleteMessage(messageId: string): Promise<boolean> {
     try {
       // First get the message to check for files
-      const { data: message } = await supabase
+      const { data: message } = await getSupabaseClient()
         .from('messages')
         .select('metadata')
         .eq('id', messageId)
@@ -158,7 +156,7 @@ class MessageService {
 
       if (message?.metadata?.files) {
         // Get file metadata records for this message
-        const { data: fileMetadata } = await supabase
+        const { data: fileMetadata } = await getSupabaseClient()
           .from('file_metadata')
           .select('storage_key')
           .eq('message_id', messageId);
@@ -166,7 +164,7 @@ class MessageService {
         // Delete files from storage and metadata
         if (fileMetadata) {
           await Promise.all(
-            fileMetadata.map(file => 
+            fileMetadata.map((file: { storage_key: string }) => 
               storageService.deleteFile(BUCKETS.ATTACHMENTS, file.storage_key)
             )
           );
@@ -174,7 +172,7 @@ class MessageService {
       }
 
       // Soft delete the message
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from('messages')
         .update({ 
           deleted_at: new Date().toISOString(),
@@ -196,7 +194,7 @@ class MessageService {
    * Add a reaction to a message
    */
   async addReaction(messageId: string, emoji: string): Promise<Reaction | null> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await getSupabaseClient().auth.getUser();
     if (!user) return null;
 
     const reaction: ReactionInsert = {
@@ -205,7 +203,7 @@ class MessageService {
       emoji,
     };
 
-    const { data: newReaction, error } = await supabase
+    const { data: newReaction, error } = await getSupabaseClient()
       .from('reactions')
       .insert(reaction)
       .select()
@@ -223,10 +221,10 @@ class MessageService {
    * Remove a reaction from a message
    */
   async removeReaction(messageId: string, emoji: string): Promise<boolean> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await getSupabaseClient().auth.getUser();
     if (!user) return false;
 
-    const { error } = await supabase
+    const { error } = await getSupabaseClient()
       .from('reactions')
       .delete()
       .eq('message_id', messageId)

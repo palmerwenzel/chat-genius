@@ -1,4 +1,4 @@
-import { createServerSupabase } from "@/lib/server-supabase";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
 import { notFound } from "next/navigation";
 
 type Props = {
@@ -8,7 +8,7 @@ type Props = {
 };
 
 export default async function GroupPage({ params }: Props) {
-  const supabase = await createServerSupabase();
+  const supabase = await getSupabaseServer();
 
   const {
     data: { user },

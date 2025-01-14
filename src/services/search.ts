@@ -1,7 +1,5 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Database } from '@/types/supabase';
-
-const supabase = createClientComponentClient<Database>();
+import type { Database } from '@/types/supabase';
+import { getSupabaseClient } from '@/lib/supabase/supabase';
 
 export type Message = Database['public']['Tables']['messages']['Row'] & {
   channel?: Channel;
@@ -17,7 +15,7 @@ export interface SearchResult {
 
 // Helper functions for channel name/id conversion
 export async function getChannelById(channelId: string): Promise<Channel | null> {
-  const { data } = await supabase
+  const { data } = await getSupabaseClient()
     .from('channels')
     .select('*')
     .eq('id', channelId)
@@ -26,7 +24,7 @@ export async function getChannelById(channelId: string): Promise<Channel | null>
 }
 
 export async function getChannelByName(groupId: string, channelName: string): Promise<Channel | null> {
-  const { data } = await supabase
+  const { data } = await getSupabaseClient()
     .from('channels')
     .select('*')
     .eq('group_id', groupId)
@@ -101,7 +99,7 @@ class SearchService {
     console.log('Formatted message query:', messageSearchTerms);
     console.log('Formatted channel query:', channelSearchTerms);
 
-    let messageQuery = supabase
+    let messageQuery = getSupabaseClient()
       .from('messages')
       .select('*, channel:channels!inner(*)', { count: 'exact' })
       .textSearch('fts', messageSearchTerms);
@@ -124,7 +122,7 @@ class SearchService {
     }
 
     // Build channel search query
-    let channelQuery = supabase
+    let channelQuery = getSupabaseClient()
       .from('channels')
       .select('*', { count: 'exact' })
       .textSearch('fts', channelSearchTerms);

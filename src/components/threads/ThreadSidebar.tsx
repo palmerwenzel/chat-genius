@@ -5,7 +5,7 @@ import { MessageInput } from "@/components/messages/MessageInput";
 import { Button } from "@/components/ui/button";
 import { X, Reply } from "lucide-react";
 import { useAuth } from "@/stores/auth";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import { Message } from "@/components/messages/Message";
 import { Database } from "@/types/supabase";
 import { storageService } from "@/services/storage";

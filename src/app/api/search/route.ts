@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { searchService } from '@/services/search';
-import type { Database } from '@/types/supabase';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -20,8 +18,8 @@ export async function GET(request: Request) {
     );
   }
 
-  // Get current user using route handler client
-  const supabase = createRouteHandlerClient<Database>({ cookies });
+  // Get current user using server client
+  const supabase = await getSupabaseServer();
   const { data: { session }, error: authError } = await supabase.auth.getSession();
 
   if (authError || !session?.user) {

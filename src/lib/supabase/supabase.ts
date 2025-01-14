@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { Database } from '@/types/supabase';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '@/types/supabase';
 
 // Check for required environment variables
 const requiredEnvVars = {
@@ -36,6 +37,7 @@ if (!finalUrl || !finalKey) {
   throw new Error('Missing required Supabase configuration. Check your environment variables.');
 }
 
+// Base Supabase instance for non-auth operations
 export const supabase = createClient<Database>(finalUrl, finalKey, {
   auth: {
     persistSession: true,
@@ -48,4 +50,14 @@ export const supabase = createClient<Database>(finalUrl, finalKey, {
       eventsPerSecond: 10,
     },
   },
-}); 
+});
+
+// Client-side singleton
+let clientInstance: ReturnType<typeof createClientComponentClient<Database>> | null = null;
+
+export const getSupabaseClient = () => {
+  if (!clientInstance) {
+    clientInstance = createClientComponentClient<Database>();
+  }
+  return clientInstance;
+}; 

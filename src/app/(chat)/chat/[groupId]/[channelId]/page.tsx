@@ -3,7 +3,7 @@ import { ChatInterface } from "@/components/chat/ChatInterface";
 import { MessageList } from "@/components/messages/MessageList";
 import { MessagesContainer } from "@/components/messages/MessagesContainer";
 import { ChannelSidebar } from "@/components/chat/ChannelSidebar";
-import { createServerSupabase } from "@/lib/server-supabase";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
 import { notFound } from "next/navigation";
 import { ChatProvider } from "@/contexts/chat";
 
@@ -16,7 +16,7 @@ export default async function ChannelPage({ params, searchParams = {} }: {
     message?: string;
   };
 }) {
-  const supabase = await createServerSupabase();
+  const supabase = await getSupabaseServer();
   // Middleware ensures session exists
   const { data: { session } } = await supabase.auth.getSession();
 

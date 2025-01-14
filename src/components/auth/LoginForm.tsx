@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FaGithub, FaGoogle } from "react-icons/fa";
 
 interface LoginFormProps {
-  onSubmit?: (email: string, password: string) => void;
+  onSubmit?: (formData: FormData) => void;
   onOAuthClick?: (provider: 'github' | 'google') => void;
   isLoading?: boolean;
   error?: Error | null;
@@ -25,9 +25,9 @@ export function LoginForm({ onSubmit, onOAuthClick, isLoading, error }: LoginFor
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    //const password = formData.get('password') as string;
     setEmail(email);
-    onSubmit?.(email, password);
+    onSubmit?.(formData);
   };
 
   // Show confirmation message if user needs to verify email

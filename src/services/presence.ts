@@ -1,127 +1,97 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '@/types/supabase';
+import { getSupabaseClient } from '@/lib/supabase/supabase';
 
 export type PresenceStatus = 'online' | 'offline' | 'idle' | 'dnd';
 
-class PresenceService {
-  private supabase = createClientComponentClient<Database>();
-  private userId: string | null = null;
-  private userSetStatus: PresenceStatus | null = null;
+interface PresenceRecord {
+  status: PresenceStatus;
+}
 
-  /**
-   * Initialize presence tracking for a user
-   */
-  async initialize(userId: string) {
-    this.userId = userId;
+export class PresenceService {
+  private static instance: PresenceService;
+  private channelSubscriptions: Map<string, () => void> = new Map();
+  private initialized: boolean = false;
 
-    // Check if user has an existing status
-    const currentStatus = await this.getCurrentStatus();
-    this.userSetStatus = currentStatus;
+  private constructor() {}
 
-    // Set up visibility tracking
-    this.setupVisibilityTracking();
-    this.setupBeforeUnload();
-  }
-
-  /**
-   * Update user's presence status
-   */
-  async updateStatus(status: PresenceStatus) {
-    if (!this.userId) return;
-
-    try {
-      // Store the user-set status
-      this.userSetStatus = status;
-
-      const { error } = await this.supabase
-        .from('presence')
-        .update({ 
-          status,
-          last_active: new Date().toISOString(),
-        })
-        .eq('user_id', this.userId);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating presence:', error);
+  static getInstance(): PresenceService {
+    if (!PresenceService.instance) {
+      PresenceService.instance = new PresenceService();
     }
+    return PresenceService.instance;
   }
 
-  /**
-   * Set up visibility tracking
-   */
-  private setupVisibilityTracking() {
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        // Only update status if user hasn't set a custom status
-        if (!this.userSetStatus || this.userSetStatus === 'offline') {
-          this.updateStatus('online');
-        }
-      } else {
-        // Only set to offline if user was previously online
-        if (this.userSetStatus === 'online') {
-          this.updateStatus('offline');
-        }
-      }
+  async initialize(userId: string): Promise<void> {
+    if (this.initialized) return;
+    
+    // Set initial online status
+    await this.updateStatus('online');
+    
+    // Subscribe to user's own presence
+    const unsubscribe = this.subscribeToUserStatus(userId, () => {
+      // Handle any presence updates
     });
+    
+    this.channelSubscriptions.set(userId, unsubscribe);
+    this.initialized = true;
   }
 
-  /**
-   * Update user's typing status in a channel
-   */
-  updateTypingStatus = async (channelId: string, isTyping: boolean) => {
-    if (!this.userId) return;
+  async updateStatus(status: PresenceStatus): Promise<void> {
+    const { data: { user } } = await getSupabaseClient().auth.getUser();
+    if (!user) return;
 
-    try {
-      const { error } = await this.supabase
-        .from('channel_typing')
-        .upsert({
-          channel_id: channelId,
-          user_id: this.userId,
-          is_typing: isTyping,
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating typing status:', error);
-    }
-  };
-
-  /**
-   * Set up beforeunload tracking
-   */
-  private setupBeforeUnload() {
-    window.addEventListener('beforeunload', async () => {
-      await this.updateStatus('offline');
-    });
+    await getSupabaseClient()
+      .from('presence')
+      .upsert({
+        user_id: user.id,
+        status,
+        last_seen: new Date().toISOString()
+      });
   }
 
-  /**
-   * Get current user status
-   */
-  async getCurrentStatus(): Promise<PresenceStatus> {
-    if (!this.userId) return 'offline';
-
-    const { data } = await this.supabase
+  async getUserStatus(userId: string): Promise<PresenceStatus> {
+    const { data } = await getSupabaseClient()
       .from('presence')
       .select('status')
-      .eq('user_id', this.userId)
+      .eq('user_id', userId)
       .single();
 
-    return (data?.status as PresenceStatus) || 'offline';
+    return (data as PresenceRecord)?.status || 'offline';
   }
 
-  /**
-   * Clean up presence tracking
-   */
-  async cleanup() {
-    if (this.userId) {
-      await this.updateStatus('offline');
-      this.userSetStatus = null;
-    }
+  subscribeToUserStatus(userId: string, callback: (status: PresenceStatus) => void): () => void {
+    const channel = getSupabaseClient()
+      .channel(`presence:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'presence',
+          filter: `user_id=eq.${userId}`
+        },
+        (payload) => {
+          if (payload.new) {
+            callback((payload.new as PresenceRecord).status);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }
+
+  async cleanup(): Promise<void> {
+    // Set status to offline before cleanup
+    await this.updateStatus('offline');
+    
+    // Unsubscribe from all channels
+    this.channelSubscriptions.forEach(unsubscribe => unsubscribe());
+    this.channelSubscriptions.clear();
+    this.initialized = false;
   }
 }
 
 // Export a singleton instance
-export const presenceService = new PresenceService(); 
+export const presenceService = PresenceService.getInstance(); 

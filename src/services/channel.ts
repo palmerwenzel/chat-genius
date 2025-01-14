@@ -1,7 +1,5 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Database } from '@/types/supabase';
-
-const supabase = createClientComponentClient<Database>();
+import type { Database } from '@/types/supabase';
+import { getSupabaseClient } from '@/lib/supabase/supabase';
 
 export type Channel = Database['public']['Tables']['channels']['Row'];
 export type ChannelInsert = Database['public']['Tables']['channels']['Insert'];
@@ -9,7 +7,7 @@ export type Group = Database['public']['Tables']['groups']['Row'];
 
 // Cache for channel data
 const channelCache = new Map<string, Channel>();
-const channelNameCache = new Map<string, string>(); // groupId:name -> channelId
+const channelNameCache = new Map<string, string>();
 
 class ChannelService {
   private readonly DEFAULT_CACHE_TIME = 1000 * 60 * 5; // 5 minutes
@@ -22,7 +20,7 @@ class ChannelService {
     const cached = channelCache.get(channelId);
     if (cached) return cached;
 
-    const { data: channel, error } = await supabase
+    const { data: channel, error } = await getSupabaseClient()
       .from('channels')
       .select('*')
       .eq('id', channelId)
@@ -52,7 +50,7 @@ class ChannelService {
       if (channel) return channel;
     }
 
-    const { data: channel, error } = await supabase
+    const { data: channel, error } = await getSupabaseClient()
       .from('channels')
       .select('*')
       .eq('group_id', groupId)
@@ -78,7 +76,7 @@ class ChannelService {
     const channel = await this.getChannelById(channelId);
     if (!channel) return null;
 
-    const { data: group } = await supabase
+    const { data: group } = await getSupabaseClient()
       .from('groups')
       .select('name')
       .eq('id', channel.group_id)
@@ -93,7 +91,7 @@ class ChannelService {
    * Get a channel from a URL path
    */
   async getChannelFromPath(groupName: string, channelName: string): Promise<Channel | null> {
-    const { data: group } = await supabase
+    const { data: group } = await getSupabaseClient()
       .from('groups')
       .select('id')
       .eq('name', groupName)
@@ -113,7 +111,7 @@ class ChannelService {
     visibility?: 'public' | 'private';
     type?: 'text' | 'voice';
   }): Promise<Channel | null> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await getSupabaseClient().auth.getUser();
     if (!user) return null;
 
     // Check if channel name exists in this group
@@ -131,7 +129,7 @@ class ChannelService {
       created_by: user.id,
     };
 
-    const { data: newChannel, error } = await supabase
+    const { data: newChannel, error } = await getSupabaseClient()
       .from('channels')
       .insert(channel)
       .select()
@@ -157,7 +155,7 @@ class ChannelService {
     description?: string;
     visibility?: 'public' | 'private';
   }): Promise<Channel | null> {
-    const { data: updatedChannel, error } = await supabase
+    const { data: updatedChannel, error } = await getSupabaseClient()
       .from('channels')
       .update(data)
       .eq('id', channelId)
@@ -180,7 +178,7 @@ class ChannelService {
    * Delete a channel
    */
   async deleteChannel(channelId: string): Promise<boolean> {
-    const { error } = await supabase
+    const { error } = await getSupabaseClient()
       .from('channels')
       .delete()
       .eq('id', channelId);

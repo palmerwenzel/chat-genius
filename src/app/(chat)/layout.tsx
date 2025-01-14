@@ -1,9 +1,10 @@
 import { Sidebar } from "@/components/sidebar/Sidebar";
-import { createServerSupabase } from "@/lib/server-supabase";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
 
 interface Channel {
   id: string;
   name: string;
+  visibility: 'public' | 'private';
 }
 
 export default async function ChatLayout({
@@ -11,17 +12,18 @@ export default async function ChatLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createServerSupabase();
+  const supabase = await getSupabaseServer();
   
   const { data: channelsData } = await supabase
     .from('channels')
-    .select('id, name')
+    .select('id, name, visibility')
     .order('name')
     .throwOnError();
 
   const channels: Channel[] = channelsData?.map(channel => ({
     id: channel.id,
-    name: channel.name
+    name: channel.name,
+    visibility: channel.visibility
   })) || [];
 
   return (

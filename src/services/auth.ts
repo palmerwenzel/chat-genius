@@ -1,35 +1,26 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { AuthError, User } from '@supabase/supabase-js';
-import type { Database } from '@/types/supabase';
+import { getSupabaseClient } from '@/lib/supabase/supabase';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 
 export type AuthResponse = {
   user: User | null;
   error: AuthError | null;
 };
 
-// Create a singleton instance
-let supabaseInstance: ReturnType<typeof createClientComponentClient<Database>> | null = null;
-
-const getSupabase = () => {
-  if (!supabaseInstance) {
-    supabaseInstance = createClientComponentClient<Database>();
-  }
-  return supabaseInstance;
-};
-
 export const auth = {
   // Get current session
   getSession: async () => {
-    const { data: { session }, error } = await getSupabase().auth.getSession();
+    const { data: { session }, error } = await getSupabaseClient().auth.getSession();
     return { user: session?.user ?? null, error };
   },
 
   // Sign in with email and password
   signIn: async (email: string, password: string): Promise<AuthResponse> => {
-    const { data: { user }, error } = await getSupabase().auth.signInWithPassword({
+    const { data: { user }, error } = await (await getSupabaseServer()).auth.signInWithPassword({
       email,
       password,
     });
+    console.log('signIn', { user, error });
     return { user, error };
   },
 
@@ -38,7 +29,7 @@ export const auth = {
     const searchParams = new URLSearchParams(window.location.search);
     const next = searchParams.get('redirect') || '/chat';
 
-    const { data: { user }, error } = await getSupabase().auth.signUp({
+    const { data: { user }, error } = await getSupabaseClient().auth.signUp({
       email,
       password,
       options: {
@@ -51,7 +42,7 @@ export const auth = {
 
   // Sign out
   signOut: async () => {
-    const { error } = await getSupabase().auth.signOut({
+    const { error } = await getSupabaseClient().auth.signOut({
       scope: 'local' // This ensures we only sign out on this device
     });
     return { error };
@@ -62,7 +53,7 @@ export const auth = {
     name?: string;
     avatar_url?: string;
   }): Promise<AuthResponse> => {
-    const { data: { user }, error } = await getSupabase().auth.updateUser({
+    const { data: { user }, error } = await getSupabaseClient().auth.updateUser({
       data: profile,
     });
     return { user, error };
@@ -73,7 +64,7 @@ export const auth = {
     const searchParams = new URLSearchParams(window.location.search);
     const next = searchParams.get('redirect') || '/chat';
 
-    const { data, error } = await getSupabase().auth.signInWithOAuth({
+    const { data, error } = await getSupabaseClient().auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${next}`,
@@ -88,7 +79,7 @@ export const auth = {
 
   // Subscribe to auth state changes
   onAuthStateChange: (callback: (user: User | null) => void) => {
-    return getSupabase().auth.onAuthStateChange((event, session) => {
+    return getSupabaseClient().auth.onAuthStateChange((event, session) => {
       callback(session?.user ?? null);
     });
   },

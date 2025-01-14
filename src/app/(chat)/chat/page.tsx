@@ -1,8 +1,8 @@
-import { createServerSupabase } from "@/lib/server-supabase";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
 import { redirect } from "next/navigation";
 
 export default async function ChatPage() {
-  const supabase = await createServerSupabase();
+  const supabase = await getSupabaseServer();
 
   // Retrieve fresh user data here (revalidates token at the server).
   const {

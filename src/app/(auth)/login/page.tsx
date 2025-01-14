@@ -4,6 +4,7 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { AuthDebug } from "@/components/auth/AuthDebug";
 import { useAuth } from "@/stores/auth";
 import { useState, useEffect, Suspense } from "react";
+import { login } from "./actions";
 
 // Separate component to handle search params
 function LoginContent() {
@@ -23,12 +24,12 @@ function LoginContent() {
     });
   }, [initialized, user]);
 
-  const handleSubmit = async (email: string, password: string) => {
+  const handleSubmit = async (formData: FormData) => {
     try {
       setIsLoading(true);
       setError(null);
       console.log('Attempting sign in...');
-      await signIn(email, password);
+      await login(formData);
       console.log('Sign in successful');
       // Redirect will be handled by middleware
     } catch (err) {
