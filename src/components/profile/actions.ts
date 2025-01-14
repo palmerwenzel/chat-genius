@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -19,7 +19,7 @@ const profileSchema = z.object({
 export type ProfileFormData = z.infer<typeof profileSchema>;
 
 export async function updateProfile(data: ProfileFormData) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   
   // Get current user
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -62,7 +62,7 @@ export async function updateProfile(data: ProfileFormData) {
 }
 
 export async function updateProfilePicture(file: File) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     const { data: { user } } = await supabase.auth.getUser();

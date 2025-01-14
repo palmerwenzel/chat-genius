@@ -1,4 +1,4 @@
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { logger } from '@/lib/logger';
 import { STORAGE_QUOTAS, type StorageQuotaKey } from './constants/limits';
 
@@ -11,7 +11,7 @@ export async function checkStorageQuota(
   additionalBytes: number
 ): Promise<boolean> {
   try {
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     const quota = STORAGE_QUOTAS[bucket];
 
     // Get current usage
@@ -42,7 +42,7 @@ export async function getStorageUsage(
   bucket: StorageQuotaKey
 ): Promise<{ used: number; total: number }> {
   try {
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     const { data: usage, error } = await supabase
       .from('file_metadata')
       .select('size')

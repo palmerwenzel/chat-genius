@@ -3,7 +3,9 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/hooks/useDebounce';
-import type { SearchResult, Message, Channel } from '@/services/search';
+import type { SearchResult } from '@/types/search';
+import type { Message } from '@/types/messages';
+import type { Channel } from '@/types/channels';
 import { Command } from 'cmdk';
 import {
   Dialog,

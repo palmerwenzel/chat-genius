@@ -1,14 +1,14 @@
-import { getSupabaseServer } from '@/lib/supabase/server';
-import { StatusSelector as StatusSelectorClient } from './client';
-import { updatePresenceStatus } from '../actions';
-import type { PresenceStatus } from '../actions';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
+import { StatusSelectorClient } from './client';
+import { updateStatus } from '@/components/presence/actions';
+import type { PresenceStatus } from '@/types/presence';
 
 interface StatusSelectorProps {
   userId: string;
 }
 
 export async function StatusSelector({ userId }: StatusSelectorProps) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   // Get initial status
   const { data } = await supabase
@@ -23,7 +23,7 @@ export async function StatusSelector({ userId }: StatusSelectorProps) {
     <StatusSelectorClient
       userId={userId}
       initialStatus={initialStatus}
-      onStatusChange={updatePresenceStatus}
+      onStatusChange={updateStatus}
     />
   );
 } 

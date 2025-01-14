@@ -1,7 +1,7 @@
 import { Suspense } from "react";
-import { getSupabaseServer } from "@/lib/supabase/server";
-import { ChannelSidebar } from "@/components/chat/ChannelSidebarNew";
-import { ChatInterface } from "@/components/chat/ChatInterface";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
+import { ChannelSidebar } from "@/components/chat/channel-sidebar/client";
+import { ChatInterface } from "@/components/chat/chat-interface/client";
 import { MessageList } from "@/components/messages/message-list/client";
 import { MessagesContainer } from "@/components/messages/messages-container/client";
 import { ChatProvider } from "@/contexts/chat";
@@ -54,7 +54,7 @@ interface Member {
 }
 
 export default async function ChannelPage({ params, searchParams = {} }: Props) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   // Get group visibility
   const { data: groupData } = await supabase

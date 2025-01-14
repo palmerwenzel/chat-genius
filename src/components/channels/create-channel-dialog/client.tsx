@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,22 +11,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '@/types/supabase';
 import { useToast } from '@/components/ui/use-toast';
-import { useAuth } from '@/stores/auth';
 import { useRouter } from 'next/navigation';
 import { navigateToChannelByName } from '@/lib/client-navigation';
+import { createChannel } from './actions';
 
-const supabase = createClientComponentClient<Database>();
+const formSchema = z.object({
+  name: z.string()
+    .min(2, 'Channel name must be at least 2 characters')
+    .max(100, 'Channel name must be less than 100 characters')
+    .regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
+  description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
+  isPublic: z.boolean().default(false),
+});
 
-interface CreateChannelForm {
-  name: string;
-  description?: string;
-  isPublic: boolean;
-}
-
-interface CreateChannelModalProps {
+interface CreateChannelDialogClientProps {
   groupId: string;
   groupName: string;
   open: boolean;
@@ -32,19 +33,17 @@ interface CreateChannelModalProps {
   onChannelCreated?: (channelId: string) => void;
 }
 
-export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onChannelCreated }: CreateChannelModalProps) {
+export function CreateChannelDialogClient({ 
+  groupId, 
+  groupName, 
+  open, 
+  onOpenChange, 
+  onChannelCreated 
+}: CreateChannelDialogClientProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const router = useRouter();
-  const form = useForm<CreateChannelForm>({
-    resolver: zodResolver(z.object({
-      name: z.string()
-        .min(2, 'Channel name must be at least 2 characters')
-        .max(100, 'Channel name must be less than 100 characters')
-        .regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
-      description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
-      isPublic: z.boolean().default(false),
-    })),
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',
       description: '',
@@ -52,58 +51,42 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
     },
   });
 
-  const onSubmit = async (data: CreateChannelForm) => {
-    if (!user?.id) {
-      toast({
-        title: 'Error',
-        description: 'You must be logged in to create a channel.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
     try {
-      // Check if channel name exists in this group
-      const { data: existingChannel } = await supabase
-        .from('channels')
-        .select('id')
-        .eq('name', data.name)
-        .eq('group_id', groupId)
-        .single();
+      const result = await createChannel({
+        ...data,
+        groupId,
+      });
 
-      if (existingChannel) {
-        form.setError('name', {
-          type: 'manual',
-          message: 'Channel name already exists in this group'
+      if (result.error) {
+        if (result.error.includes('already exists')) {
+          form.setError('name', {
+            type: 'manual',
+            message: result.error
+          });
+          return;
+        }
+
+        toast({
+          title: 'Error',
+          description: result.error,
+          variant: 'destructive',
         });
         return;
       }
 
-      const { data: channel, error } = await supabase
-        .from('channels')
-        .insert({
-          name: data.name,
-          description: data.description || null,
-          visibility: data.isPublic ? 'public' : 'private',
-          type: 'text',
-          created_by: user.id,
-          group_id: groupId,
-        })
-        .select()
-        .single();
+      if (result.message) {
+        toast({
+          title: 'Success',
+          description: result.message,
+        });
+      }
 
-      if (error) throw error;
-
-      toast({
-        title: 'Channel created',
-        description: `#${data.name} has been created successfully.`,
-      });
-
-      onChannelCreated?.(channel.id);
+      onChannelCreated?.(result.channelId);
       onOpenChange(false);
       form.reset();
       
-      // Navigate to the new channel using our navigation helper
+      // Navigate to the new channel
       await navigateToChannelByName(groupName, data.name, router);
     } catch (error) {
       console.error('Error creating channel:', error);

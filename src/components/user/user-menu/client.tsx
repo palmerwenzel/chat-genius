@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from "react";
 import {
   DropdownMenu,
@@ -10,18 +12,23 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogOut, Settings, User as UserIcon } from "lucide-react";
 import { useAuth } from "@/stores/auth";
-import { StatusSelector } from "@/components/presence/StatusSelector";
+import { StatusSelector } from "@/components/presence/status-selector";
 import { cn } from "@/lib/utils";
+import type { UserProfile } from './actions';
 
-interface UserMenuProps {
+interface UserMenuClientProps {
   expanded?: boolean;
+  initialData: UserProfile | null;
 }
 
-export function UserMenu({ expanded = true }: UserMenuProps) {
-  const { user, signOut } = useAuth();
+export function UserMenuClient({ expanded = true, initialData }: UserMenuClientProps) {
+  const { signOut } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
-  if (!user) return null;
+  if (!initialData) return null;
+
+  const displayName = initialData.name || initialData.email?.split('@')[0];
+  const initial = displayName?.[0]?.toUpperCase();
 
   return (
     <div className="relative">
@@ -40,16 +47,16 @@ export function UserMenu({ expanded = true }: UserMenuProps) {
         )}>
           <div className="relative">
             <Avatar className="h-10 w-10 transition-all">
-              {user.user_metadata.avatar_url ? (
-                <AvatarImage src={user.user_metadata.avatar_url} alt={user.user_metadata.name} />
+              {initialData.avatarUrl ? (
+                <AvatarImage src={initialData.avatarUrl} alt={displayName || ''} />
               ) : (
                 <AvatarFallback>
-                  {user.user_metadata.name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
+                  {initial}
                 </AvatarFallback>
               )}
             </Avatar>
             <div className="absolute -bottom-0.5 -right-0.5 status-selector">
-              <StatusSelector size="md" />
+              <StatusSelector userId={initialData.id} />
             </div>
           </div>
           <div className={cn(
@@ -58,11 +65,11 @@ export function UserMenu({ expanded = true }: UserMenuProps) {
           )}>
             <div className="flex items-center min-w-0">
               <span className="truncate font-medium">
-                {user.user_metadata.name || user.email?.split('@')[0]}
+                {displayName}
               </span>
             </div>
             <span className="text-xs text-muted-foreground truncate">
-              {user.email}
+              {initialData.email}
             </span>
           </div>
         </div>

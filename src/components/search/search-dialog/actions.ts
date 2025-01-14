@@ -1,7 +1,9 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
-import type { SearchResult, Message, Channel } from '@/services/search';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
+import type { SearchResult } from '@/types/search';
+import type { Message } from '@/types/messages';
+import type { Channel } from '@/types/channels';
 
 export async function searchContent(params: {
   query: string;
@@ -9,7 +11,7 @@ export async function searchContent(params: {
   channelId?: string;
   groupId?: string;
 }): Promise<{ results: SearchResult[] }> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   const { query, type, channelId, groupId } = params;
 
   try {

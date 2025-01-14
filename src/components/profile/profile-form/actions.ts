@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { revalidatePath } from 'next/cache';
 
 const profileSchema = z.object({
@@ -14,7 +14,7 @@ export type ProfileFormData = z.infer<typeof profileSchema>;
 
 export async function updateProfile(data: ProfileFormData) {
   try {
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     const { data: session } = await supabase.auth.getSession();
     
     if (!session?.session?.user) {
@@ -51,7 +51,7 @@ export async function updateProfile(data: ProfileFormData) {
 
 export async function updateProfilePicture(file: File) {
   try {
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     const { data: session } = await supabase.auth.getSession();
     
     if (!session?.session?.user) {

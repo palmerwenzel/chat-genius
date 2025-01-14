@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Settings } from 'lucide-react';
 import { Surface } from '@/components/ui/surface';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { UserMenu } from '@/components/user/user-menu';
+import { UserMenuClient } from '@/components/user/user-menu/client';
 import { getInitialData, getGroupChannels } from './actions';
 import { GroupsSection } from './groups-section';
 import { ChannelsSection } from './channels-section';
@@ -89,7 +89,7 @@ export async function SidebarNav({
 
       {/* User Menu */}
       <div className="p-2 border-t shrink-0">
-        <UserMenu expanded={false} />
+        <UserMenuClient expanded={false} />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ChatInterface } from "@/components/chat/ChatInterfaceNew";
+import { ChatInterface } from "@/components/chat/ChatInterface";
 
 interface DMPageProps {
   params: {

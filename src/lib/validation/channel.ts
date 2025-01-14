@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { logger } from '@/lib/logger';
 
 // Channel name validation schema
@@ -26,7 +26,7 @@ export async function validateChannelName(groupId: string, name: string) {
     channelNameSchema.parse(name);
 
     // Then check for duplicates
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     const { data, error } = await supabase
       .from('channels')
       .select('id')

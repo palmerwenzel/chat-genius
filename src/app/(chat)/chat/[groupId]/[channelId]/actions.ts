@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { logger } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -48,7 +48,7 @@ function sortMembers(members: Member[]): Member[] {
 }
 
 export async function getChannelMembers(groupId: string, channelId: string): Promise<Member[]> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     // First check if it's a public group
@@ -79,7 +79,7 @@ export async function getChannelMembers(groupId: string, channelId: string): Pro
 
       if (membersError) throw membersError;
 
-      const formattedMembers = (members || []).map(member => ({
+      const formattedMembers = (members || []).map((member: any) => ({
         id: member.id,
         name: member.name,
         email: member.email,
@@ -112,7 +112,7 @@ export async function getChannelMembers(groupId: string, channelId: string): Pro
 
       if (membersError) throw membersError;
 
-      const formattedMembers = (members || []).map(member => ({
+      const formattedMembers = (members || []).map((member: any) => ({
         id: member.users.id,
         name: member.users.name,
         email: member.users.email,
@@ -131,7 +131,7 @@ export async function getChannelMembers(groupId: string, channelId: string): Pro
 }
 
 export async function getChannelMessages(channelId: string, limit = 50, before?: string) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     let query = supabase
@@ -168,7 +168,7 @@ export async function getChannelMessages(channelId: string, limit = 50, before?:
 
 // Channel lookup functions
 export async function getChannelById(channelId: string): Promise<Channel | null> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     const { data, error } = await supabase
@@ -186,7 +186,7 @@ export async function getChannelById(channelId: string): Promise<Channel | null>
 }
 
 export async function getChannelByName(groupId: string, channelName: string): Promise<Channel | null> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     const { data, error } = await supabase
@@ -205,7 +205,7 @@ export async function getChannelByName(groupId: string, channelName: string): Pr
 }
 
 export async function createMessage(data: CreateMessageData): Promise<MessageWithReactions> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     const {
@@ -250,7 +250,7 @@ export async function createMessage(data: CreateMessageData): Promise<MessageWit
 }
 
 export async function updateMessage(messageId: string, data: UpdateMessageData) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     const { error } = await supabase
@@ -267,7 +267,7 @@ export async function updateMessage(messageId: string, data: UpdateMessageData) 
 }
 
 export async function toggleReaction(messageId: string, userId: string, emoji: string) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     // Check rate limit for adding reactions
@@ -319,7 +319,7 @@ export async function toggleReaction(messageId: string, userId: string, emoji: s
 }
 
 export async function deleteMessage(messageId: string) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     // First get the message to check for files
@@ -380,7 +380,7 @@ export async function deleteMessage(messageId: string) {
 }
 
 export async function getThreadMessages(threadId: string, limit = 50, before?: string): Promise<MessageWithReactions[]> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     let query = supabase

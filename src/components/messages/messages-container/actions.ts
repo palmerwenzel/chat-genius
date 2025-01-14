@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import type { Database } from '@/types/supabase';
 
 type MessageType = Database['public']['Tables']['messages']['Row'] & {
@@ -13,7 +13,7 @@ type MessageType = Database['public']['Tables']['messages']['Row'] & {
 };
 
 export async function getMessages(channelId: string) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   const { data: messages, error } = await supabase
     .from('messages')
@@ -35,7 +35,7 @@ export async function getMessages(channelId: string) {
 }
 
 export async function getMessageById(messageId: string) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   const { data: message, error } = await supabase
     .from('messages')

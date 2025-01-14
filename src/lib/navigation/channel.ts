@@ -1,9 +1,9 @@
 import { cache } from 'react';
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { logger } from '@/lib/logger';
 
 export const getChannelPath = cache(async (channelId: string) => {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   const { data, error } = await supabase
     .from('channels')
     .select(`
@@ -26,7 +26,7 @@ export const getChannelPath = cache(async (channelId: string) => {
 });
 
 export const getChannelFromPath = cache(async (groupName: string, channelName: string) => {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   
   // First get the group
   const { data: group, error: groupError } = await supabase

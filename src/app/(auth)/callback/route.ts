@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const next = url.searchParams.get("next") || "/chat";
 
   if (code) {
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
     // Exchange code for a session
     await supabase.auth.exchangeCodeForSession(code);
   }

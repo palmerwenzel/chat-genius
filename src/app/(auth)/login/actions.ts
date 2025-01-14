@@ -36,10 +36,15 @@ export async function signInWithEmail(formData: FormData): Promise<AuthResult> {
       return { data: null, error: error.message };
     }
 
+    // Successful login - don't catch the redirect
     redirect('/chat');
   } catch (error) {
-    logger.error('auth.signIn.unexpected', error);
-    return { data: null, error: 'An unexpected error occurred' };
+    // Only log actual errors, not redirects
+    if (error instanceof Error && error.message !== 'NEXT_REDIRECT') {
+      logger.error('auth.signIn.unexpected', error);
+      return { data: null, error: 'An unexpected error occurred' };
+    }
+    throw error; // Re-throw redirect
   }
 }
 

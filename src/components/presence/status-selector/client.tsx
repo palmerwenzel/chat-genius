@@ -11,14 +11,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
+  TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useToast } from '@/components/ui/use-toast';
-import type { PresenceStatus } from '../actions';
+import type { PresenceStatus } from '@/types/presence';
 import type { Database } from '@/types/supabase';
 
 const statusConfig = {
@@ -31,12 +31,12 @@ const statusConfig = {
 interface StatusSelectorProps {
   userId: string;
   initialStatus?: PresenceStatus;
-  onStatusChange: (status: PresenceStatus) => Promise<{ error?: string; success?: boolean; message?: string }>;
+  onStatusChange?: (status: PresenceStatus) => Promise<{ error?: string; success?: boolean; message?: string }>;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
 }
 
-export function StatusSelector({ 
+export function StatusSelectorClient({ 
   userId, 
   initialStatus = 'online', 
   onStatusChange,
@@ -74,6 +74,8 @@ export function StatusSelector({
   }, [supabase, userId, isSubscribed]);
 
   const handleStatusChange = async (newStatus: PresenceStatus) => {
+    if (!onStatusChange) return;
+
     try {
       const result = await onStatusChange(newStatus);
       
@@ -112,7 +114,7 @@ export function StatusSelector({
 
   return (
     <TooltipProvider>
-      <Tooltip>
+      <Tooltip.Root>
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
@@ -152,7 +154,7 @@ export function StatusSelector({
         <TooltipContent>
           <p>Click to change your status</p>
         </TooltipContent>
-      </Tooltip>
+      </Tooltip.Root>
     </TooltipProvider>
   );
 } 

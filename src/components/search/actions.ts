@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { logger } from '@/lib/logger';
 import type { SearchOptions, SearchResponse, SearchResult } from '@/types/search';
 import type { Message } from '@/types/messages';
@@ -12,7 +12,7 @@ const DEFAULT_LIMIT = 20;
  * Search across messages and channels
  */
 export async function search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   const {
     limit = DEFAULT_LIMIT,
     offset = 0,

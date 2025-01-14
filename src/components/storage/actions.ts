@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { logger } from '@/lib/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { revalidatePath } from 'next/cache';
@@ -12,7 +12,7 @@ export async function uploadFile(
   metadata: UploadMetadata,
   userId: string
 ): Promise<string | null> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   const storageKey = `${bucket}/${uuidv4()}-${metadata.name}`;
 
   try {
@@ -58,7 +58,7 @@ export async function uploadFile(
 }
 
 export async function deleteFile(bucket: BucketName, storageKey: string): Promise<boolean> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     // Delete from storage
@@ -86,7 +86,7 @@ export async function deleteFile(bucket: BucketName, storageKey: string): Promis
 }
 
 export async function getFileMetadata(storageKey: string): Promise<FileInfo | null> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     const { data, error } = await supabase
@@ -113,7 +113,7 @@ export async function getFileMetadata(storageKey: string): Promise<FileInfo | nu
 }
 
 export async function getChannelAttachments(channelId: string): Promise<FileInfo[]> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     const { data, error } = await supabase
@@ -140,7 +140,7 @@ export async function getChannelAttachments(channelId: string): Promise<FileInfo
 }
 
 export async function getMessageAttachments(messageId: string): Promise<FileInfo[]> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   try {
     const { data, error } = await supabase
@@ -170,7 +170,7 @@ export async function uploadAvatar(
   file: File,
   userId: string
 ): Promise<{ url: string } | { error: string }> {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   const fileName = `${userId}-${Date.now()}.${file.name.split('.').pop()}`;
 
   try {

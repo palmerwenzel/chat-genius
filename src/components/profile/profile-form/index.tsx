@@ -1,4 +1,4 @@
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/supabase-server';
 import { ProfileForm } from './client';
 import { updateProfile, updateProfilePicture } from './actions';
 
@@ -7,7 +7,7 @@ interface ProfileFormServerProps {
 }
 
 export async function ProfileFormServer({ userId }: ProfileFormServerProps) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   
   // Fetch user profile data
   const { data: user, error } = await supabase

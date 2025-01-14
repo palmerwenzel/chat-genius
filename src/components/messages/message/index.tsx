@@ -1,5 +1,5 @@
-import { getSupabaseServer } from "@/lib/supabase/server";
-import { MessageClient } from "./client";
+import { getSupabaseServer } from "@/lib/supabase/supabase-server";
+import { MessageClient } from "@/components/messages/message/client";
 import { notFound } from "next/navigation";
 import type { Database } from "@/types/supabase";
 
@@ -29,7 +29,7 @@ interface MessageProps {
 }
 
 export async function Message({ id, isBeingRepliedTo, isThreadMessage }: MessageProps) {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
 
   // Fetch message data
   const { data: message } = await supabase
