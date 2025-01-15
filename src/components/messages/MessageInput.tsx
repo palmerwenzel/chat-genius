@@ -27,13 +27,33 @@ interface MessageInputProps {
 const BOT_COMMANDS = [
   {
     command: '@bot seed',
-    description: 'Triggers conversation between two AI chatbots',
-    usage: '@bot seed <prompt>'
+    description: 'Triggers conversation between two AI chatbots using current personas',
+    usage: '@bot seed "your conversation prompt" --turns 3'
   },
   {
     command: '@bot summary',
-    description: 'Generates channel summary using RAG',
-    usage: '@bot summary'
+    description: 'Generates channel summary using RAG with semantic search',
+    usage: '@bot summary "optional focus query"'
+  },
+  {
+    command: '@bot personas',
+    description: 'View current personas for both chatbots',
+    usage: '@bot personas'
+  },
+  {
+    command: '@bot set-personas',
+    description: 'Set custom personas for both chatbots (requires reset-index after)',
+    usage: '@bot set-personas --bot1 "your first bot persona" --bot2 "your second bot persona"'
+  },
+  {
+    command: '@bot reset-index',
+    description: 'Reset the Pinecone vector store (required after changing personas)',
+    usage: '@bot reset-index'
+  },
+  {
+    command: '@bot index',
+    description: 'Index channel messages in Pinecone for RAG functionality',
+    usage: '@bot index'
   }
 ];
 
@@ -117,20 +137,42 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
   };
 
   const handleCommandSelect = (command: string) => {
-    const cursorPosition = textareaRef.current?.selectionStart || 0;
-    const textBeforeCursor = content.substring(0, cursorPosition);
-    const textAfterCursor = content.substring(cursorPosition);
+    // Get the command template from BOT_COMMANDS
+    const selectedCommand = BOT_COMMANDS.find(cmd => cmd.command === command);
+    if (!selectedCommand) return;
+
+    // Replace placeholders with actual template
+    let template = selectedCommand.usage;
+    if (command === '@bot set-personas') {
+      template = '@bot set-personas --bot1 "your first bot persona" --bot2 "your second bot persona"';
+    } else if (command === '@bot seed') {
+      template = '@bot seed "Write a conversation about..." --turns 3';
+    } else if (command === '@bot summary') {
+      template = '@bot summary "optional focus for the summary"';
+    }
     
-    // Replace the @ with the full command
-    const newContent = textBeforeCursor + command + ' ' + textAfterCursor;
-    setContent(newContent);
+    setContent(template);
     setShowCommands(false);
     
-    // Focus back on textarea and move cursor after the command
+    // Focus back on textarea and move cursor to the appropriate position
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
-      const newPosition = cursorPosition + command.length + 1;
-      textareaRef.current?.setSelectionRange(newPosition, newPosition);
+      if (command === '@bot seed') {
+        // Place cursor inside the quotes after "Write a conversation about"
+        const cursorPosition = template.indexOf('"') + 1;
+        const endPosition = template.indexOf('"', cursorPosition);
+        textareaRef.current?.setSelectionRange(cursorPosition, endPosition);
+      } else if (command === '@bot set-personas') {
+        // Place cursor at first persona
+        const cursorPosition = template.indexOf('"') + 1;
+        const endPosition = template.indexOf('"', cursorPosition);
+        textareaRef.current?.setSelectionRange(cursorPosition, endPosition);
+      } else if (command === '@bot summary') {
+        // Place cursor inside the quotes
+        const cursorPosition = template.indexOf('"') + 1;
+        const endPosition = template.indexOf('"', cursorPosition);
+        textareaRef.current?.setSelectionRange(cursorPosition, endPosition);
+      }
     });
   };
 
@@ -216,18 +258,19 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
 
       <div className="relative">
         {showCommands && (
-          <Command className="absolute bottom-full mb-1 w-64">
-            <CommandList>
+          <Command className="absolute bottom-[100%] translate-y-[0px] mb-1 w-[400px] z-50 border shadow-md bg-popover rounded-md overflow-hidden h-[400px]">
+            <CommandList className="h-full overflow-y-auto">
               {BOT_COMMANDS.map((cmd) => (
                 <CommandItem
                   key={cmd.command}
                   onSelect={() => handleCommandSelect(cmd.command)}
-                  className="flex items-center gap-2"
+                  className="flex items-start gap-2 p-3 cursor-pointer hover:bg-accent"
                 >
-                  <Bot className="h-4 w-4" />
-                  <div>
-                    <p>{cmd.command}</p>
-                    <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                  <Bot className="h-4 w-4 mt-1 shrink-0" />
+                  <div className="flex flex-col gap-1 overflow-hidden">
+                    <p className="font-medium">{cmd.command}</p>
+                    <p className="text-sm text-muted-foreground">{cmd.description}</p>
+                    <p className="text-xs text-muted-foreground/80 font-mono">{cmd.usage}</p>
                   </div>
                 </CommandItem>
               ))}

@@ -20,24 +20,22 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const messages = body.messages as RAGMessage[];
-    const { query } = body;
 
     if (!messages?.length) {
       return NextResponse.json(
-        { error: 'No messages provided for summary' },
+        { error: 'No messages provided for indexing' },
         { status: 400 }
       );
     }
 
-    console.log('Generating summary:', {
+    console.log('Indexing messages:', {
       count: messages.length,
-      query: query || 'none',
       firstMessage: messages[0],
       lastMessage: messages[messages.length - 1]
     });
 
     // Call RAG service
-    const response = await fetch(`${process.env.NEXT_PUBLIC_RAG_SERVICE_URL}/api/summary`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_RAG_SERVICE_URL}/api/index`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,8 +46,7 @@ export async function POST(request: Request) {
           role: msg.role,
           content: msg.content,
           metadata: msg.metadata
-        })),
-        query 
+        }))
       }),
     });
 
@@ -60,16 +57,16 @@ export async function POST(request: Request) {
         statusText: response.statusText,
         error: errorData
       });
-      throw new Error(errorData?.detail || 'Failed to generate summary');
+      throw new Error(errorData?.detail || 'Failed to index messages');
     }
 
     const data = await response.json();
-    console.log('Summary generated successfully:', data);
+    console.log('Indexing successful:', data);
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error generating summary:', error);
+    console.error('Error indexing messages:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate summary' },
+      { error: error instanceof Error ? error.message : 'Failed to index messages' },
       { status: 500 }
     );
   }

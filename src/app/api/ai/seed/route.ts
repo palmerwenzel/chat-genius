@@ -1,67 +1,53 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { aiService } from '@/services/ai';
-import type { Database } from '@/types/supabase';
 
-if (!process.env.BOT_USER_1_ID || !process.env.BOT_USER_2_ID) {
-  throw new Error('Missing bot user configuration');
+interface SeedRequest {
+  prompt: string;
+  num_turns?: number;
 }
 
 export async function POST(request: Request) {
   try {
-    const { channelId, prompt } = await request.json();
+    const body = await request.json();
+    const { prompt, num_turns = 3 } = body as SeedRequest;
 
-    if (!channelId || !prompt) {
+    if (!prompt) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Prompt is required' },
         { status: 400 }
       );
     }
 
-    // Get authenticated user
-    const supabase = createRouteHandlerClient<Database>({ cookies });
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('Seeding conversation:', {
+      prompt,
+      num_turns
+    });
 
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    const response = await fetch(`${process.env.NEXT_PUBLIC_RAG_SERVICE_URL}/api/seed`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_RAG_SERVICE_API_KEY}`,
+      },
+      body: JSON.stringify({ prompt, num_turns }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      console.error('RAG service error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData
+      });
+      throw new Error(errorData?.detail || 'Failed to seed conversation');
     }
 
-    // Generate conversation
-    const messages = await aiService.generateConversation(prompt);
-
-    // Store messages in database
-    const { error: insertError } = await supabase
-      .from('messages')
-      .insert(
-        messages.map((message, index) => ({
-          channel_id: channelId,
-          sender_id: index % 2 === 0 ? process.env.BOT_USER_1_ID : process.env.BOT_USER_2_ID,
-          content: message.content,
-          type: 'text',
-          metadata: {
-            is_bot: true,
-            bot_number: (index % 2) + 1
-          }
-        }))
-      );
-
-    if (insertError) {
-      console.error('Error inserting messages:', insertError);
-      return NextResponse.json(
-        { error: 'Failed to store messages' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true });
+    const data = await response.json();
+    console.log('Conversation seeded successfully:', data);
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error in seed endpoint:', error);
+    console.error('Error seeding conversation:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Failed to seed conversation' },
       { status: 500 }
     );
   }

@@ -1,15 +1,9 @@
 import OpenAI from 'openai';
+import { ragService } from './rag';
+import type { RAGMessage } from '@/types/rag';
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error('Missing OPENAI_API_KEY environment variable');
-}
-
-if (!process.env.RAG_SERVICE_URL) {
-  throw new Error('Missing RAG_SERVICE_URL environment variable');
-}
-
-if (!process.env.RAG_SERVICE_API_KEY) {
-  throw new Error('Missing RAG_SERVICE_API_KEY environment variable');
 }
 
 const openai = new OpenAI({
@@ -58,6 +52,23 @@ Keep responses concise and engaging. Use a casual, friendly tone.`;
       }
     }
 
+    // Index the generated conversation in RAG service
+    try {
+      const ragMessages: RAGMessage[] = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        metadata: {
+          type: msg.role === 'system' ? 'system_prompt' : 'bot_message',
+          topic: prompt,
+        },
+      }));
+      
+      await ragService.indexMessages(ragMessages);
+    } catch (error) {
+      console.error('Failed to index conversation in RAG service:', error);
+      // Continue even if indexing fails
+    }
+
     return messages.filter(m => m.role === 'assistant');
   },
 
@@ -66,28 +77,17 @@ Keep responses concise and engaging. Use a casual, friendly tone.`;
    */
   async generateSummary(messages: { content: string; sender: string }[]): Promise<string> {
     try {
-      const response = await fetch(process.env.RAG_SERVICE_URL + '/api/summarize', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.RAG_SERVICE_API_KEY}`,
+      const ragMessages: RAGMessage[] = messages.map(m => ({
+        role: 'user',
+        content: m.content,
+        metadata: {
+          sender: m.sender,
+          type: 'channel_message',
         },
-        body: JSON.stringify({
-          messages: messages.map(m => ({
-            content: m.content,
-            metadata: {
-              sender: m.sender,
-            }
-          }))
-        }),
-      });
+      }));
 
-      if (!response.ok) {
-        throw new Error('Failed to generate summary from RAG service');
-      }
-
-      const data = await response.json();
-      return data.summary;
+      const response = await ragService.generateSummary(ragMessages);
+      return response.summary;
     } catch (error) {
       console.error('Error using RAG service, falling back to OpenAI:', error);
 
