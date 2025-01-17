@@ -1,13 +1,16 @@
 import { createServerSupabase } from "@/lib/server-supabase";
 import { notFound } from "next/navigation";
+import { redirectToChannel } from "@/lib/navigation";
 
-type Props = {
+interface Props {
   params: {
     groupId: string;
   };
-};
+}
 
 export default async function GroupPage({ params }: Props) {
+  // Await the params at the start
+  const groupId = await params.groupId;
   const supabase = await createServerSupabase();
 
   const {
@@ -35,7 +38,7 @@ export default async function GroupPage({ params }: Props) {
           user_id
         )
       `)
-      .eq('name', params.groupId)
+      .eq('name', groupId)
       .eq('group_members.user_id', user.id)
       .single(),
     supabase
@@ -47,7 +50,7 @@ export default async function GroupPage({ params }: Props) {
         description,
         visibility
       `)
-      .eq('name', params.groupId)
+      .eq('name', groupId)
       .eq('visibility', 'public')
       .single()
   ]);
@@ -58,12 +61,36 @@ export default async function GroupPage({ params }: Props) {
     return notFound();
   }
 
-  // You could redirect to the first channel or handle it here
-  // In your original code, you do a separate fetch for channels.
-  // If ultimately you want the user redirected from /chat/[groupId]
-  // to /chat/[groupId]/[channelId], you can do that fetch here.
-  // For now, we show a group page as an example:
+  // Get the first available channel for this user
+  const [{ data: memberChannels }, { data: publicChannels }] = await Promise.all([
+    // Get channels where user is a member
+    supabase
+      .from('channels')
+      .select('name')
+      .eq('group_id', group.id)
+      .eq('channel_members.user_id', user.id)
+      .order('name')
+      .limit(1),
+    
+    // Get public channels
+    supabase
+      .from('channels')
+      .select('name')
+      .eq('group_id', group.id)
+      .eq('visibility', 'public')
+      .order('name')
+      .limit(1)
+  ]);
 
+  // Use the first available channel (member channel takes precedence)
+  const firstChannel = memberChannels?.[0] || publicChannels?.[0];
+  
+  if (firstChannel) {
+    // Redirect to the first channel
+    redirectToChannel(group.name, firstChannel.name);
+  }
+
+  // If no channels are available, show the group page
   return (
     <div className="flex flex-col items-center justify-center h-full text-center p-8">
       <h1 className="text-2xl font-bold mb-4">{group.display_name}</h1>
@@ -71,7 +98,7 @@ export default async function GroupPage({ params }: Props) {
         <p className="text-muted-foreground mb-8 max-w-lg">{group.description}</p>
       )}
       <div className="text-muted-foreground">
-        {/* etc. */}
+        No channels available. Create a new channel to get started.
       </div>
     </div>
   );

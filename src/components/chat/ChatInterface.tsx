@@ -91,6 +91,10 @@ function parseBotCommand(content: string): ParsedCommand | null {
 
 const supabase = createClientComponentClient<Database>();
 
+const BOT_1_ID = process.env.BOT_USER_1_ID || '00000000-0000-0000-0000-000000000b01';
+const BOT_2_ID = process.env.BOT_USER_2_ID || '00000000-0000-0000-0000-000000000b02';
+const SYSTEM_BOT_ID = process.env.SYSTEM_BOT_ID || '00000000-0000-0000-0000-000000000000';
+
 export function ChatInterface({
   title,
   subtitle,
@@ -197,8 +201,8 @@ export function ChatInterface({
           for (const message of messages) {
             const botNumber = message.metadata.bot_number;
             const botUserId = botNumber === 1 
-              ? '00000000-0000-0000-0000-000000000b01'  // Bot 1
-              : '00000000-0000-0000-0000-000000000b02'; // Bot 2
+              ? BOT_1_ID  // Bot 1
+              : BOT_2_ID; // Bot 2
 
             await supabase
               .from('messages')
@@ -217,75 +221,80 @@ export function ChatInterface({
               });
           }
         } else if (botCommand.command === 'summary') {
-          // Fetch channel messages first
-          const { data: messages, error: messagesError } = await supabase
-            .from('messages')
-            .select('content, sender_id, metadata')
-            .eq('channel_id', channelId)
-            .is('deleted_at', null)
-            .order('created_at', { ascending: true });
+          try {
+            const messages = await supabase
+              .from('messages')
+              .select('*')
+              .eq('channel_id', channelId)
+              .is('deleted_at', null)
+              .order('created_at', { ascending: true });
 
-          if (messagesError) {
-            console.error('Error fetching messages:', messagesError);
-            throw new Error('Failed to fetch channel messages');
-          }
+            if (messages.error) throw messages.error;
+            if (!messages.data.length) {
+              toast({
+                variant: "destructive",
+                description: 'No messages found in channel to summarize'
+              });
+              return;
+            }
 
-          if (!messages?.length) {
-            throw new Error('No messages found in channel');
-          }
-
-          // Transform messages for RAG service
-          const ragMessages = messages
-            .filter(msg => !msg.metadata?.is_command_response) // Filter out command responses
-            .map(msg => ({
-              role: msg.metadata?.is_bot ? 'assistant' : 'user',
-              content: msg.content,
-              metadata: {
-                ...msg.metadata,
-                sender: msg.sender_id,
-                type: 'channel_message'
-              }
-            }));
-
-          const response = await fetch('/api/ai/summary', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: ragMessages,
-              query: botCommand.prompt
-            })
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            throw new Error(errorData?.error || 'Failed to generate summary');
-          }
-
-          const data = await response.json();
-          if (!data.summary) {
-            throw new Error('No summary returned from RAG service');
-          }
-
-          // Add summary as a bot message
-          await supabase
-            .from('messages')
-            .insert({
-              channel_id: channelId,
-              content: data.summary,
-              sender_id: '00000000-0000-0000-0000-000000000b01', // Use Bot 1 for summaries
-              type: 'text',
-              metadata: {
-                is_bot: true,
-                is_summary: true,
-                is_command_response: true,
-                sender_name: 'Bot 1'
-              }
+            console.log(`Generating summary for ${messages.data.length} messages`);
+            const response = await fetch('/api/ai/summary', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                messages: messages.data.map(msg => ({
+                  role: msg.metadata?.is_bot ? 'assistant' : 'user',
+                  content: msg.content,
+                  metadata: msg.metadata || {},
+                  channel_id: msg.channel_id,
+                  sender_id: msg.sender_id,
+                  created_at: msg.created_at
+                })),
+                query: botCommand.prompt,
+                filter: {
+                  channel_id: channelId,
+                }
+              })
             });
 
-          toast({
-            title: 'Summary Generated',
-            description: 'The channel summary has been added to the chat.',
-          });
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.error || 'Failed to generate summary');
+            }
+
+            const data = await response.json();
+            
+            // Insert the summary as a system bot message
+            const { error: insertError } = await supabase
+              .from('messages')
+              .insert({
+                channel_id: channelId,
+                content: data.summary,
+                type: 'text',
+                sender_id: SYSTEM_BOT_ID, // System Bot for system messages
+                metadata: {
+                  is_bot: true,
+                  bot_type: 'system',
+                  sender_name: 'System',
+                  is_summary: true
+                }
+              });
+
+            if (insertError) throw insertError;
+            toast({
+              description: 'Summary generated and added to chat'
+            });
+          } catch (error) {
+            console.error('Error in summary generation:', error);
+            toast({
+              variant: "destructive",
+              description: error instanceof Error ? error.message : 'Failed to generate summary'
+            });
+          }
+          return;
         } else if (botCommand.command === 'index') {
           // Fetch channel messages
           const { data: messages, error: messagesError } = await supabase
@@ -365,13 +374,13 @@ export function ChatInterface({
             .insert({
               channel_id: channelId,
               content: `Current personas:\nBot 1: ${data.bot1_persona}\nBot 2: ${data.bot2_persona}`,
-              sender_id: '00000000-0000-0000-0000-000000000b01', // Use Bot 1 for system messages
+              sender_id: SYSTEM_BOT_ID, // System Bot for system messages
               type: 'text',
               metadata: {
                 is_bot: true,
                 is_system: true,
                 is_command_response: true,
-                sender_name: 'Bot 1'
+                sender_name: 'System'
               }
             });
 
@@ -401,13 +410,13 @@ export function ChatInterface({
             .insert({
               channel_id: channelId,
               content: `Personas updated:\nBot 1: ${botCommand.bot1_persona}\nBot 2: ${botCommand.bot2_persona}\n\nNote: Use @bot reset-index to clear the message index before starting a new conversation.`,
-              sender_id: '00000000-0000-0000-0000-000000000b01', // Use Bot 1 for system messages
+              sender_id: SYSTEM_BOT_ID, // System Bot for system messages
               type: 'text',
               metadata: {
                 is_bot: true,
                 is_system: true,
                 is_command_response: true,
-                sender_name: 'Bot 1'
+                sender_name: 'System'
               }
             });
 
@@ -433,13 +442,13 @@ export function ChatInterface({
             .insert({
               channel_id: channelId,
               content: 'Message index has been reset. You can now start a new conversation with different personas.',
-              sender_id: '00000000-0000-0000-0000-000000000b01', // Use Bot 1 for system messages
+              sender_id: SYSTEM_BOT_ID, // System Bot for system messages
               type: 'text',
               metadata: {
                 is_bot: true,
                 is_system: true,
                 is_command_response: true,
-                sender_name: 'Bot 1'
+                sender_name: 'System'
               }
             });
 
