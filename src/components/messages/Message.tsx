@@ -14,8 +14,6 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useChatContext } from '@/contexts/chat';
 import { MessageInput } from '@/components/messages/MessageInput';
 
-const supabase = createClientComponentClient<Database>();
-
 interface Reaction {
   emoji: string;
   count: number;
@@ -62,6 +60,7 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
   const [parentMessage, setParentMessage] = useState<MessageType | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const urls = message.content.match(/https?:\/\/[^\s]+/g) || [];
+  const supabase = createClientComponentClient<Database>();
 
   // Handle message update
   const handleUpdateMessage = async (content: string, type: 'text' | 'code' = 'text') => {
@@ -232,40 +231,9 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
         });
       }
     } catch (error) {
-      if (error instanceof Error && error.message.includes('Results contain 0 rows')) {
-        console.log('No existing reaction found, adding new one');
-        // No existing reaction, add new one
-        await supabase
-          .from('reactions')
-          .insert({
-            message_id: message.id,
-            user_id: user.id,
-            emoji,
-          });
-
-        // Immediately update local state
-        setReactions(prev => {
-          const existing = prev.find(r => r.emoji === emoji);
-          if (existing) {
-            return prev.map(reaction => {
-              if (reaction.emoji === emoji && !reaction.users.includes(user.id)) {
-                return {
-                  ...reaction,
-                  users: [...reaction.users, user.id],
-                  count: reaction.count + 1
-                };
-              }
-              return reaction;
-            });
-          } else {
-            return [...prev, { emoji, count: 1, users: [user.id] }];
-          }
-        });
-      } else {
-        console.error('Error toggling reaction:', error);
-      }
+      console.error('Error toggling reaction:', error);
     }
-  }, [message.id, user]);
+  }, [message.id, user, supabase]);
 
   // Load reactions
   const loadReactions = useCallback(async () => {
@@ -293,7 +261,7 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
 
       setReactions(groupedReactions);
     }
-  }, [message.id]);
+  }, [message.id, supabase]);
 
   // Load and subscribe to reactions
   useEffect(() => {
@@ -302,25 +270,58 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
     loadReactions();
 
     // Subscribe to reaction changes
-    const subscription = supabase
+    const channel = supabase
       .channel(`message-reactions-${message.id}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'reactions',
         filter: `message_id=eq.${message.id}`
-      }, () => {
-        if (mounted) {
-          loadReactions();
+      }, (payload) => {
+        if (!mounted) return;
+
+        // Handle the change immediately instead of reloading all reactions
+        if (payload.eventType === 'INSERT') {
+          setReactions(prev => {
+            const existing = prev.find(r => r.emoji === payload.new.emoji);
+            if (existing) {
+              return prev.map(reaction => {
+                if (reaction.emoji === payload.new.emoji && !reaction.users.includes(payload.new.user_id)) {
+                  return {
+                    ...reaction,
+                    users: [...reaction.users, payload.new.user_id],
+                    count: reaction.count + 1
+                  };
+                }
+                return reaction;
+              });
+            } else {
+              return [...prev, { emoji: payload.new.emoji, count: 1, users: [payload.new.user_id] }];
+            }
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setReactions(prev => {
+            return prev.map(reaction => {
+              if (reaction.emoji === payload.old.emoji) {
+                const users = reaction.users.filter(id => id !== payload.old.user_id);
+                return {
+                  ...reaction,
+                  users,
+                  count: users.length
+                };
+              }
+              return reaction;
+            }).filter(reaction => reaction.count > 0);
+          });
         }
       })
       .subscribe();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      channel.unsubscribe();
     };
-  }, [message.id, loadReactions]);
+  }, [message.id, loadReactions, supabase]);
 
   const handleThreadClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering the context menu

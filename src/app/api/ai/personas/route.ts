@@ -25,11 +25,26 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { bot1_persona, bot2_persona } = await request.json();
+    const { personas } = await request.json();
 
-    if (!bot1_persona || !bot2_persona) {
+    if (!personas || typeof personas !== 'object') {
       return NextResponse.json(
-        { error: 'Both bot personas are required' },
+        { error: 'Personas object is required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate persona format
+    const validPersonaKeys = Object.keys(personas).every(key => 
+      key.match(/^bot\d+_persona$/) && 
+      typeof personas[key] === 'string' &&
+      parseInt(key.match(/\d+/)?.[0] || '0') >= 1 &&
+      parseInt(key.match(/\d+/)?.[0] || '0') <= 10
+    );
+
+    if (!validPersonaKeys) {
+      return NextResponse.json(
+        { error: 'Invalid persona format. Each key should be botN_persona where N is 1-10' },
         { status: 400 }
       );
     }
@@ -40,7 +55,7 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.NEXT_PUBLIC_RAG_SERVICE_API_KEY}`,
       },
-      body: JSON.stringify({ bot1_persona, bot2_persona }),
+      body: JSON.stringify({ personas }),
     });
 
     if (!response.ok) {

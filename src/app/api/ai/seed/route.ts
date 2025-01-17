@@ -3,12 +3,14 @@ import { NextResponse } from 'next/server';
 interface SeedRequest {
   prompt: string;
   num_turns?: number;
+  bots?: number[];
+  channelId: string;
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { prompt, num_turns = 3 } = body as SeedRequest;
+    const { prompt, num_turns = 3, bots, channelId } = body as SeedRequest;
 
     if (!prompt) {
       return NextResponse.json(
@@ -17,9 +19,24 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate bot numbers if provided
+    if (bots) {
+      const validBots = bots.every(bot => 
+        typeof bot === 'number' && bot >= 1 && bot <= 10
+      );
+      if (!validBots) {
+        return NextResponse.json(
+          { error: 'Invalid bot numbers. Must be between 1 and 10' },
+          { status: 400 }
+        );
+      }
+    }
+
     console.log('Seeding conversation:', {
       prompt,
-      num_turns
+      num_turns,
+      bots: bots || 'default',
+      channelId
     });
 
     const response = await fetch(`${process.env.NEXT_PUBLIC_RAG_SERVICE_URL}/api/seed`, {
@@ -28,7 +45,7 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.NEXT_PUBLIC_RAG_SERVICE_API_KEY}`,
       },
-      body: JSON.stringify({ prompt, num_turns }),
+      body: JSON.stringify({ prompt, num_turns, bots, channelId }),
     });
 
     if (!response.ok) {

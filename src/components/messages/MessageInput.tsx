@@ -6,6 +6,7 @@ import { Plus, Send, Image, FileText, Reply, X, Bot } from "lucide-react";
 import { FileUpload } from "./FileUpload";
 import { presenceService } from '@/services/presence';
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
+import { BOT_COMMAND_METADATA } from '@/lib/bot-commands';
 
 interface MessageInputProps {
   onSend?: (content: string, type: 'text' | 'code', attachments?: File[], replyTo?: { id: string; content: string; author: string }) => void;
@@ -24,38 +25,7 @@ interface MessageInputProps {
   channelId?: string;
 }
 
-const BOT_COMMANDS = [
-  {
-    command: '@bot seed',
-    description: 'Triggers conversation between two AI chatbots using current personas',
-    usage: '@bot seed "your conversation prompt" --turns 3'
-  },
-  {
-    command: '@bot summary',
-    description: 'Generates channel summary using RAG with semantic search',
-    usage: '@bot summary "optional focus query"'
-  },
-  {
-    command: '@bot personas',
-    description: 'View current personas for both chatbots',
-    usage: '@bot personas'
-  },
-  {
-    command: '@bot set-personas',
-    description: 'Set custom personas for both chatbots (requires reset-index after)',
-    usage: '@bot set-personas --bot1 "your first bot persona" --bot2 "your second bot persona"'
-  },
-  {
-    command: '@bot reset-index',
-    description: 'Reset the Pinecone vector store (required after changing personas)',
-    usage: '@bot reset-index'
-  },
-  {
-    command: '@bot index',
-    description: 'Index channel messages in Pinecone for RAG functionality',
-    usage: '@bot index'
-  }
-];
+const BOT_COMMANDS = Object.values(BOT_COMMAND_METADATA);
 
 export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInputProps>(({ 
   onSend, 
@@ -148,37 +118,22 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
     const selectedCommand = BOT_COMMANDS.find(cmd => cmd.command === command);
     if (!selectedCommand) return;
 
-    // Replace placeholders with actual template
-    let template = selectedCommand.usage;
-    if (command === '@bot set-personas') {
-      template = '@bot set-personas --bot1 "your first bot persona" --bot2 "your second bot persona"';
-    } else if (command === '@bot seed') {
-      template = '@bot seed "Write a conversation about..." --turns 3';
-    } else if (command === '@bot summary') {
-      template = '@bot summary "optional focus for the summary"';
-    }
-    
+    // Use the command's usage template
+    const template = selectedCommand.usage;
     setContent(template);
     setShowCommands(false);
     
     // Only focus and select after command menu is fully closed
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
-      if (command === '@bot seed') {
-        // Place cursor inside the quotes after "Write a conversation about"
-        const cursorPosition = template.indexOf('"') + 1;
-        const endPosition = template.indexOf('"', cursorPosition);
-        textareaRef.current?.setSelectionRange(cursorPosition, endPosition);
-      } else if (command === '@bot set-personas') {
-        // Place cursor at first persona
-        const cursorPosition = template.indexOf('"') + 1;
-        const endPosition = template.indexOf('"', cursorPosition);
-        textareaRef.current?.setSelectionRange(cursorPosition, endPosition);
-      } else if (command === '@bot summary') {
-        // Place cursor inside the quotes
-        const cursorPosition = template.indexOf('"') + 1;
-        const endPosition = template.indexOf('"', cursorPosition);
-        textareaRef.current?.setSelectionRange(cursorPosition, endPosition);
+
+      // Find the first quoted section to place cursor in
+      const quoteStart = template.indexOf('"');
+      if (quoteStart !== -1) {
+        const quoteEnd = template.indexOf('"', quoteStart + 1);
+        if (quoteEnd !== -1) {
+          textareaRef.current?.setSelectionRange(quoteStart + 1, quoteEnd);
+        }
       }
     });
   };
