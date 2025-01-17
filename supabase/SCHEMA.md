@@ -20,7 +20,8 @@ Groups that contain channels.
 | Column      | Type                    | Constraints                                    | Description                    |
 |-------------|-------------------------|-----------------------------------------------|--------------------------------|
 | id          | UUID                    | PRIMARY KEY, DEFAULT uuid_generate_v4()       | Unique identifier              |
-| name        | TEXT                    | NOT NULL, LENGTH <= 100                       | Group name                     |
+| name        | TEXT                    | NOT NULL, LENGTH <= 100                       | URL-friendly name              |
+| display_name | TEXT                   | NOT NULL, LENGTH <= 100                       | Display name                   |
 | description | TEXT                    | NULL, LENGTH <= 1000                          | Group description              |
 | visibility  | TEXT                    | CHECK (IN ('public', 'private')), DEFAULT 'private' | Group visibility         |
 | created_by  | UUID                    | REFERENCES users(id) ON DELETE SET NULL       | Creator's user ID             |

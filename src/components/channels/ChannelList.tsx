@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { PlusIcon } from "lucide-react";
 import { navigateToChannelByName } from '@/lib/client-navigation';
+import { ChannelActions } from './ChannelActions';
 
 interface Channel {
   id: string;
@@ -11,6 +12,9 @@ interface Channel {
   type: 'text' | 'voice';
   unread?: boolean;
   category?: string;
+  topic?: string;
+  visibility?: 'public' | 'private';
+  group_id: string;
 }
 
 interface ChannelListProps {
@@ -55,18 +59,30 @@ export function ChannelList({ groupName, channels, onCreateChannel }: ChannelLis
             </h4>
             <div className="space-y-1">
               {categoryChannels.map((channel) => (
-                <Button
+                <ChannelActions
                   key={channel.id}
-                  variant="ghost"
-                  className={"w-full justify-start " + (channel.unread ? "font-semibold" : "")}
-                  onClick={() => handleChannelClick(channel.name)}
+                  channelId={channel.id}
+                  isPrivate={channel.visibility === 'private'}
                 >
-                  {channel.type === 'text' ? '#' : '🔊'}{' '}
-                  {channel.name}
-                  {channel.unread && (
-                    <div className="ml-auto h-2 w-2 rounded-full bg-primary" />
-                  )}
-                </Button>
+                  <div className="relative" onContextMenu={(e) => {
+                    console.log('ChannelList: Right-click on wrapper div:', e);
+                  }}>
+                    <Button
+                      variant="ghost"
+                      className={"w-full justify-start " + (channel.unread ? "font-semibold" : "")}
+                      onClick={() => handleChannelClick(channel.name)}
+                      onContextMenu={(e) => {
+                        console.log('ChannelList: Right-click on button:', e);
+                      }}
+                    >
+                      {channel.type === 'text' ? '#' : '🔊'}{' '}
+                      {channel.name}
+                      {channel.unread && (
+                        <div className="ml-auto h-2 w-2 rounded-full bg-primary" />
+                      )}
+                    </Button>
+                  </div>
+                </ChannelActions>
               ))}
             </div>
             <Separator className="my-2" />

@@ -39,6 +39,7 @@ export interface Database {
         Row: {
           id: string
           name: string
+          display_name: string
           description: string | null
           visibility: 'public' | 'private'
           created_by: string
@@ -48,6 +49,7 @@ export interface Database {
         Insert: {
           id?: string
           name: string
+          display_name: string
           description?: string | null
           visibility?: 'public' | 'private'
           created_by: string
@@ -57,6 +59,7 @@ export interface Database {
         Update: {
           id?: string
           name?: string
+          display_name?: string
           description?: string | null
           visibility?: 'public' | 'private'
           created_by?: string

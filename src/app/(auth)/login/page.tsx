@@ -30,7 +30,7 @@ function LoginContent() {
       console.log('Attempting sign in...');
       await signIn(email, password);
       console.log('Sign in successful');
-      // Redirect will be handled by middleware
+      window.location.href = '/chat';
     } catch (err) {
       console.error('Login error:', err);
       setError(err as Error);

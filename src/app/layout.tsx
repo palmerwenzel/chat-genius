@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { Surface } from "@/components/ui/surface";
+import { RAGProgress } from '@/components/ui/rag-progress';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -30,6 +31,7 @@ export default function RootLayout({
           <Surface className="min-h-screen">
             {children}
           </Surface>
+          <RAGProgress />
         </ThemeProvider>
       </body>
     </html>
