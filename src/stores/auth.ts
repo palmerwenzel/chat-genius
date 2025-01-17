@@ -32,6 +32,7 @@ export const useAuth = create<AuthState>(() => ({
     const { error } = await auth.signOut();
     if (error) throw error;
     useAuth.setState({ user: null });
+    window.location.href = '/login';
   },
   signInWithProvider: async (provider: 'github' | 'google') => {
     const { error } = await auth.signInWithProvider(provider);

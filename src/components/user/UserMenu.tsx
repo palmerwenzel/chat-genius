@@ -84,7 +84,14 @@ export function UserMenu({ expanded = true }: UserMenuProps) {
             Settings
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => signOut()}>
+          <DropdownMenuItem onClick={async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              console.error('Error signing out:', error);
+              // You might want to show a toast notification here
+            }
+          }}>
             <LogOut className="mr-2 h-4 w-4" />
             Log out
           </DropdownMenuItem>
