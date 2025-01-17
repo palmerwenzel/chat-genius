@@ -24,7 +24,7 @@ export default function RegisterPage() {
       setIsLoading(true);
       setError(null);
       await signUp(data.email, data.password, { name: data.name });
-      // Redirect will be handled by middleware
+      window.location.href = '/chat';
     } catch (err) {
       console.error('Registration error:', err);
       setError(err as Error);

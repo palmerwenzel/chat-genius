@@ -35,14 +35,10 @@ export const auth = {
 
   // Sign up with email and password
   signUp: async (email: string, password: string, options?: { name?: string }): Promise<AuthResponse> => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const next = searchParams.get('redirect') || '/chat';
-
     const { data: { user }, error } = await getSupabase().auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${next}`,
         data: options?.name ? { name: options.name } : undefined,
       },
     });
