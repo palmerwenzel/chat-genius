@@ -27,6 +27,7 @@ export default async function GroupPage({ params }: Props) {
       .select(`
         id,
         name,
+        display_name,
         description,
         visibility,
         group_members!inner (
@@ -42,6 +43,7 @@ export default async function GroupPage({ params }: Props) {
       .select(`
         id,
         name,
+        display_name,
         description,
         visibility
       `)
@@ -64,7 +66,7 @@ export default async function GroupPage({ params }: Props) {
 
   return (
     <div className="flex flex-col items-center justify-center h-full text-center p-8">
-      <h1 className="text-2xl font-bold mb-4">{group.name}</h1>
+      <h1 className="text-2xl font-bold mb-4">{group.display_name}</h1>
       {group.description && (
         <p className="text-muted-foreground mb-8 max-w-lg">{group.description}</p>
       )}

@@ -15,7 +15,9 @@ import type { Database } from '@/types/supabase';
 import { Surface } from "../ui/surface";
 import { UserMenu } from "@/components/user/UserMenu";
 import { toast } from "@/components/ui/use-toast";
-import { navigateToChannelByName, navigateToGroup } from '@/lib/client-navigation';
+import { navigateToChannelByName } from '@/lib/client-navigation';
+import { GroupActions } from '@/components/groups/GroupActions';
+import { ChannelActions } from '@/components/channels/ChannelActions';
 
 const supabase = createClientComponentClient<Database>();
 
@@ -35,6 +37,7 @@ interface DirectMessage {
 interface Group {
   id: string;
   name: string;
+  display_name: string;
   description?: string;
   role: 'owner' | 'admin' | 'member' | 'none';
   visibility: 'public' | 'private';
@@ -56,6 +59,7 @@ export const Sidebar = ({
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState(initialChannelName || pathname?.split('/')?.pop());
   const [isGroupsExpanded, setIsGroupsExpanded] = useState(false);
+  const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
 
@@ -172,6 +176,7 @@ export const Sidebar = ({
           .select(`
             id,
             name,
+            display_name,
             description,
             visibility,
             group_members!inner (
@@ -187,6 +192,7 @@ export const Sidebar = ({
           .select(`
             id,
             name,
+            display_name,
             description,
             visibility,
             group_members!left (
@@ -218,6 +224,7 @@ export const Sidebar = ({
         return {
           id: group.id,
           name: group.name,
+          display_name: group.display_name,
           description: group.description || undefined,
           role: membership?.role || 'none',
           visibility: group.visibility
@@ -299,13 +306,13 @@ export const Sidebar = ({
           <div 
             className={cn(
               "absolute top-0 left-0 h-full border-r transition-all duration-300 ease-in-out z-10 flex flex-col",
-              isGroupsExpanded 
+              isGroupsExpanded || isGroupMenuOpen
                 ? "backdrop-blur-md bg-background/80 supports-[backdrop-filter]:bg-background/60" 
                 : "bg-background",
-              isGroupsExpanded ? "w-[320px]" : "w-[72px]"
+              isGroupsExpanded || isGroupMenuOpen ? "w-[320px]" : "w-[72px]"
             )}
             onMouseEnter={() => setIsGroupsExpanded(true)}
-            onMouseLeave={() => setIsGroupsExpanded(false)}
+            onMouseLeave={() => !isGroupMenuOpen && setIsGroupsExpanded(false)}
           >
             <ScrollArea className="flex-1">
               <div className="p-2 pl-4 space-y-2">
@@ -314,73 +321,52 @@ export const Sidebar = ({
                     {currentGroupName === group.name && (
                       <div className="absolute -left-4 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-md" />
                     )}
-                    <Button
-                      variant="ghost"
-                      className={cn(
-                        "w-full transition-all duration-200 hover:bg-muted/30",
-                        isGroupsExpanded ? "justify-start px-4" : "justify-center p-0",
-                        currentGroupName === group.name && "text-primary",
-                        group.role === 'none' && "opacity-75"
-                      )}
-                      onClick={async () => {
-                        if (currentGroupName === group.name) return;
-
-                        const { data: { session } } = await supabase.auth.getSession();
-                        if (!session?.user) return;
-
-                        // Get first available channel (either public or user is member)
-                        const [{ data: memberChannels }, { data: publicChannels }] = await Promise.all([
-                          // Get channels where user is a member
-                          supabase
-                            .from('channels')
-                            .select('name')
-                            .eq('group_id', group.id)
-                            .eq('channel_members.user_id', session.user.id)
-                            .order('name')
-                            .limit(1),
-                          
-                          // Get public channels
-                          supabase
-                            .from('channels')
-                            .select('name')
-                            .eq('group_id', group.id)
-                            .eq('visibility', 'public')
-                            .order('name')
-                            .limit(1)
-                        ]);
-
-                        const firstChannel = memberChannels?.[0] || publicChannels?.[0];
-
-                        // Navigate to first available channel or group page
-                        if (firstChannel) {
-                          await navigateToChannelByName(group.name, firstChannel.name, router);
-                        } else {
-                          await navigateToGroup(group.name, router);
-                        }
-                      }}
+                    <GroupActions
+                      groupId={group.id}
+                      isPrivate={group.visibility === 'private'}
+                      onContextMenuChange={setIsGroupMenuOpen}
                     >
-                      <Avatar className="h-10 w-10 transition-all">
-                        <AvatarFallback>
-                          {group.name[0].toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div 
-                        className={cn(
-                          "ml-3 transition-all duration-300 min-w-0 text-left flex items-center gap-1.5",
-                          isGroupsExpanded ? "opacity-100 flex-1" : "opacity-0 w-0"
-                        )}
-                      >
-                        <span className="truncate">{group.name}</span>
-                        {group.role !== 'none' && group.role !== 'member' && (
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            ({group.role})
-                          </span>
-                        )}
-                        {group.visibility === 'private' && (
-                          <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
-                        )}
+                      <div className="relative">
+                        <Button
+                          variant="ghost"
+                          className={cn(
+                            "w-full transition-all duration-200 hover:bg-muted/30",
+                            (isGroupsExpanded || isGroupMenuOpen) ? "justify-start px-4" : "justify-center p-0",
+                            currentGroupName === group.name && "text-primary",
+                            group.role === 'none' && "opacity-75"
+                          )}
+                          onClick={() => {
+                            if (group.role === 'none') {
+                              // TODO: Show join group dialog
+                              return;
+                            }
+                            router.push(`/chat/${group.name}`);
+                          }}
+                        >
+                          <Avatar className="h-10 w-10 transition-all">
+                            <AvatarFallback>
+                              {group.display_name[0].toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div 
+                            className={cn(
+                              "ml-3 transition-all duration-300 min-w-0 text-left flex items-center gap-1.5",
+                              (isGroupsExpanded || isGroupMenuOpen) ? "opacity-100 flex-1" : "opacity-0 w-0"
+                            )}
+                          >
+                            <span className="truncate">{group.display_name}</span>
+                            {group.role !== 'none' && group.role !== 'member' && (
+                              <span className="text-xs text-muted-foreground shrink-0">
+                                ({group.role})
+                              </span>
+                            )}
+                            {group.visibility === 'private' && (
+                              <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                            )}
+                          </div>
+                        </Button>
                       </div>
-                    </Button>
+                    </GroupActions>
                   </div>
                 ))}
 
@@ -436,24 +422,29 @@ export const Sidebar = ({
                   </div>
                   <div className="space-y-1">
                     {channels.map((channel) => (
-                      <Button
+                      <ChannelActions
                         key={channel.id}
-                        variant="ghost"
-                        className={cn(
-                          "w-full justify-start transition-colors duration-200",
-                          selectedChannel === channel.name && "text-primary bg-muted/50"
-                        )}
-                        onClick={() => handleChannelClick(channel.name)}
+                        channelId={channel.id}
+                        isPrivate={channel.visibility === 'private'}
                       >
-                        <Hash className={cn(
-                          "h-4 w-4 mr-2 shrink-0",
-                          selectedChannel === channel.name && "text-primary"
-                        )} />
-                        <span className="truncate">{channel.name}</span>
-                        {channel.visibility === 'private' && (
-                          <Lock className="h-3 w-3 ml-1.5 text-muted-foreground shrink-0" />
-                        )}
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          className={cn(
+                            "w-full justify-start transition-colors duration-200",
+                            selectedChannel === channel.name && "text-primary bg-muted/50"
+                          )}
+                          onClick={() => handleChannelClick(channel.name)}
+                        >
+                          <Hash className={cn(
+                            "h-4 w-4 mr-2 shrink-0",
+                            selectedChannel === channel.name && "text-primary"
+                          )} />
+                          <span className="truncate">{channel.name}</span>
+                          {channel.visibility === 'private' && (
+                            <Lock className="h-3 w-3 ml-1.5 text-muted-foreground shrink-0" />
+                          )}
+                        </Button>
+                      </ChannelActions>
                     ))}
                   </div>
                 </div>

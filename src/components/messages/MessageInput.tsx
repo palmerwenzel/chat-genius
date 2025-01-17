@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Plus, Send, Image, FileText, Reply, X, Bot } from "lucide-react";
 import { FileUpload } from "./FileUpload";
 import { presenceService } from '@/services/presence';
-import { Command, CommandList, CommandItem } from "@/components/ui/command";
+import { Command, CommandList, CommandItem, CommandInput } from "@/components/ui/command";
 
 interface MessageInputProps {
   onSend?: (content: string, type: 'text' | 'code', attachments?: File[], replyTo?: { id: string; content: string; author: string }) => void;
@@ -117,15 +117,22 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
       
       // Only show commands if @ is typed at the start of a line or after a space
       if (cursorPosition === 0 || textBeforeCursor.endsWith(' ')) {
+        e.preventDefault(); // Prevent @ from being typed
         setShowCommands(true);
       }
     } else if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (!showCommands) { // Only send if command menu is not open
+        handleSend();
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       if (showCommands) {
         setShowCommands(false);
+        // Focus back on textarea after closing command menu
+        requestAnimationFrame(() => {
+          textareaRef.current?.focus();
+        });
       } else if (replyTo && onCancelReply) {
         onCancelReply();
       } else if (onCancel) {
@@ -154,7 +161,7 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
     setContent(template);
     setShowCommands(false);
     
-    // Focus back on textarea and move cursor to the appropriate position
+    // Only focus and select after command menu is fully closed
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
       if (command === '@bot seed') {
@@ -219,6 +226,29 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
     };
   }, []);
 
+  // Handle command menu escape key
+  React.useEffect(() => {
+    if (!showCommands) return;
+
+    const handleCommandEscape = (e: Event) => {
+      if ((e as KeyboardEvent).key === 'Escape') {
+        e.preventDefault();
+        setShowCommands(false);
+        // Focus back on textarea after closing command menu
+        requestAnimationFrame(() => {
+          textareaRef.current?.focus();
+        });
+      }
+    };
+
+    // Target the command input specifically
+    const commandInput = document.querySelector('[cmdk-input]');
+    if (commandInput) {
+      commandInput.addEventListener('keydown', handleCommandEscape as EventListener);
+      return () => commandInput.removeEventListener('keydown', handleCommandEscape as EventListener);
+    }
+  }, [showCommands]);
+
   return (
     <div className="flex flex-col gap-2">
       {replyTo && (
@@ -258,11 +288,43 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
 
       <div className="relative">
         {showCommands && (
-          <Command className="absolute bottom-[100%] translate-y-[0px] mb-1 w-[400px] z-50 border shadow-md bg-popover rounded-md overflow-hidden h-[400px]">
-            <CommandList className="h-full overflow-y-auto">
+          <Command 
+            className="absolute bottom-[100%] translate-y-[0px] mb-1 w-[400px] z-50 border shadow-md bg-popover rounded-md overflow-hidden h-[300px]"
+            shouldFilter={true}
+            loop={true}
+          >
+            <CommandInput 
+              placeholder="Search commands..."
+              className="border-0"
+              autoFocus={true}
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setShowCommands(false);
+                  // Focus back on textarea after closing command menu
+                  requestAnimationFrame(() => {
+                    textareaRef.current?.focus();
+                  });
+                }
+              }}
+            />
+            <CommandList 
+              className="h-full overflow-y-auto"
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setShowCommands(false);
+                  // Focus back on textarea after closing command menu
+                  requestAnimationFrame(() => {
+                    textareaRef.current?.focus();
+                  });
+                }
+              }}
+            >
               {BOT_COMMANDS.map((cmd) => (
                 <CommandItem
                   key={cmd.command}
+                  value={cmd.command}
                   onSelect={() => handleCommandSelect(cmd.command)}
                   className="flex items-start gap-2 p-3 cursor-pointer hover:bg-accent"
                 >

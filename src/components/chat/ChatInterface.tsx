@@ -210,6 +210,7 @@ export function ChatInterface({
                 metadata: {
                   ...message.metadata,
                   is_bot: true,
+                  is_command_response: true,
                   bot_number: botNumber,
                   sender_name: `Bot ${botNumber}`
                 }
@@ -234,15 +235,17 @@ export function ChatInterface({
           }
 
           // Transform messages for RAG service
-          const ragMessages = messages.map(msg => ({
-            role: msg.metadata?.is_bot ? 'assistant' : 'user',
-            content: msg.content,
-            metadata: {
-              ...msg.metadata,
-              sender: msg.sender_id,
-              type: 'channel_message'
-            }
-          }));
+          const ragMessages = messages
+            .filter(msg => !msg.metadata?.is_command_response) // Filter out command responses
+            .map(msg => ({
+              role: msg.metadata?.is_bot ? 'assistant' : 'user',
+              content: msg.content,
+              metadata: {
+                ...msg.metadata,
+                sender: msg.sender_id,
+                type: 'channel_message'
+              }
+            }));
 
           const response = await fetch('/api/ai/summary', {
             method: 'POST',
@@ -274,6 +277,7 @@ export function ChatInterface({
               metadata: {
                 is_bot: true,
                 is_summary: true,
+                is_command_response: true,
                 sender_name: 'Bot 1'
               }
             });
@@ -306,15 +310,17 @@ export function ChatInterface({
           });
 
           // Transform messages for RAG service
-          const ragMessages = messages.map(msg => ({
-            role: msg.metadata?.is_bot ? 'assistant' : 'user',
-            content: msg.content,
-            metadata: {
-              ...msg.metadata,
-              sender: msg.sender_id,
-              type: 'channel_message'
-            }
-          }));
+          const ragMessages = messages
+            .filter(msg => !msg.metadata?.is_command_response) // Filter out command responses
+            .map(msg => ({
+              role: msg.metadata?.is_bot ? 'assistant' : 'user',
+              content: msg.content,
+              metadata: {
+                ...msg.metadata,
+                sender: msg.sender_id,
+                type: 'channel_message'
+              }
+            }));
 
           // Call RAG service to index messages
           const response = await fetch('/api/ai/index', {
@@ -364,6 +370,7 @@ export function ChatInterface({
               metadata: {
                 is_bot: true,
                 is_system: true,
+                is_command_response: true,
                 sender_name: 'Bot 1'
               }
             });
@@ -388,8 +395,6 @@ export function ChatInterface({
             throw new Error(errorData?.error || 'Failed to set personas');
           }
 
-          const data = await response.json();
-          
           // Add confirmation as a bot message
           await supabase
             .from('messages')
@@ -401,6 +406,7 @@ export function ChatInterface({
               metadata: {
                 is_bot: true,
                 is_system: true,
+                is_command_response: true,
                 sender_name: 'Bot 1'
               }
             });
@@ -421,8 +427,6 @@ export function ChatInterface({
             throw new Error(errorData?.error || 'Failed to reset index');
           }
 
-          const data = await response.json();
-          
           // Add confirmation as a bot message
           await supabase
             .from('messages')
@@ -434,6 +438,7 @@ export function ChatInterface({
               metadata: {
                 is_bot: true,
                 is_system: true,
+                is_command_response: true,
                 sender_name: 'Bot 1'
               }
             });
@@ -544,7 +549,7 @@ export function ChatInterface({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto hover:pr-0 pr-[12px] transition-[padding] duration-150 flex flex-col min-h-0">
+      <div className="flex-1 overflow-y-auto transition-[padding] duration-150 flex flex-col min-h-0">
         <div className="flex-1">
           {children}
         </div>

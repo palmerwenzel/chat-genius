@@ -21,7 +21,7 @@ const supabase = createClientComponentClient<Database>();
 interface CreateChannelForm {
   name: string;
   description?: string;
-  isPublic: boolean;
+  isPrivate: boolean;
 }
 
 interface CreateChannelModalProps {
@@ -43,12 +43,12 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
         .max(100, 'Channel name must be less than 100 characters')
         .regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
       description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
-      isPublic: z.boolean().default(false),
+      isPrivate: z.boolean().default(false),
     })),
     defaultValues: {
       name: '',
       description: '',
-      isPublic: false,
+      isPrivate: false,
     },
   });
 
@@ -84,7 +84,7 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
         .insert({
           name: data.name,
           description: data.description || null,
-          visibility: data.isPublic ? 'public' : 'private',
+          visibility: data.isPrivate ? 'private' : 'public',
           type: 'text',
           created_by: user.id,
           group_id: groupId,
@@ -169,13 +169,13 @@ export function CreateChannelModal({ groupId, groupName, open, onOpenChange, onC
             />
             <FormField
               control={form.control}
-              name="isPublic"
+              name="isPrivate"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Public Channel</FormLabel>
+                    <FormLabel className="text-base">Private Channel</FormLabel>
                     <FormDescription>
-                      Anyone in the workspace can view and join this channel.
+                      Only invited members can view and join this channel.
                     </FormDescription>
                   </div>
                   <FormControl>

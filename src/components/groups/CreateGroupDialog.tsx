@@ -32,8 +32,11 @@ const createGroupSchema = z.object({
     .min(1, 'Name is required')
     .max(50, 'Name must be 50 characters or less')
     .regex(/^[a-z0-9-]+$/, 'Only lowercase letters, numbers, and hyphens allowed'),
+  display_name: z.string()
+    .min(1, 'Display name is required')
+    .max(100, 'Display name must be 100 characters or less'),
   description: z.string().max(1000, 'Description must be 1000 characters or less').optional(),
-  isPublic: z.boolean().default(false),
+  isPrivate: z.boolean().default(false),
 });
 
 type CreateGroupForm = z.infer<typeof createGroupSchema>;
@@ -52,8 +55,9 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
     resolver: zodResolver(createGroupSchema),
     defaultValues: {
       name: '',
+      display_name: '',
       description: '',
-      isPublic: false,
+      isPrivate: false,
     },
   });
 
@@ -74,8 +78,9 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
         .from('groups')
         .insert({
           name: data.name,
+          display_name: data.display_name,
           description: data.description || null,
-          visibility: data.isPublic ? 'public' : 'private',
+          visibility: data.isPrivate ? 'private' : 'public',
           created_by: session.user.id,
         })
         .select()
@@ -114,23 +119,50 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="name"
+              name="display_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Group Name</FormLabel>
+                  <FormLabel>Display Name</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="e.g. engineering"
+                      placeholder="e.g. Engineering Team"
                       {...field}
                       onChange={(e) => {
-                        // Convert to lowercase and replace spaces with hyphens
-                        const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-                        field.onChange(value);
+                        field.onChange(e.target.value);
+                        // Always update URL-friendly name when display name changes
+                        const urlFriendlyName = e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9-\s]/g, '')
+                          .replace(/\s+/g, '-')
+                          .replace(/-+/g, '-')
+                          .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+                        form.setValue('name', urlFriendlyName);
                       }}
                     />
                   </FormControl>
                   <FormDescription>
-                    Lowercase letters, numbers, and hyphens only.
+                    The name that will be displayed throughout the app.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>URL Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g. engineering-team"
+                      {...field}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Used in URLs. Automatically generated from display name.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -158,13 +190,13 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
             />
             <FormField
               control={form.control}
-              name="isPublic"
+              name="isPrivate"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Public Group</FormLabel>
+                    <FormLabel className="text-base">Private Group</FormLabel>
                     <FormDescription>
-                      Anyone can find and join this group.
+                      Only invited members can find and join this group.
                     </FormDescription>
                   </div>
                   <FormControl>
