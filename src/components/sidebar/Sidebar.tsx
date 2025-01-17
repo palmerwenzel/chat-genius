@@ -18,6 +18,7 @@ import { toast } from "@/components/ui/use-toast";
 import { navigateToChannelByName } from '@/lib/client-navigation';
 import { GroupActions } from '@/components/groups/GroupActions';
 import { ChannelActions } from '@/components/channels/ChannelActions';
+import { JoinGroupDialog } from "@/components/groups/JoinGroupDialog";
 
 const supabase = createClientComponentClient<Database>();
 
@@ -62,6 +63,8 @@ export const Sidebar = ({
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
   // Extract current group from URL
   const currentGroupName = pathname?.split('/')?.[2];
@@ -327,44 +330,61 @@ export const Sidebar = ({
                       onContextMenuChange={setIsGroupMenuOpen}
                     >
                       <div className="relative">
-                        <Button
-                          variant="ghost"
+                        <div
                           className={cn(
-                            "w-full transition-all duration-200 hover:bg-muted/30",
+                            "w-full transition-all duration-200 hover:bg-muted/30 rounded-md text-sm cursor-pointer",
                             (isGroupsExpanded || isGroupMenuOpen) ? "justify-start px-4" : "justify-center p-0",
                             currentGroupName === group.name && "text-primary",
                             group.role === 'none' && "opacity-75"
                           )}
                           onClick={() => {
                             if (group.role === 'none') {
-                              // TODO: Show join group dialog
+                              // Show join group dialog
+                              setShowJoinDialog(true);
+                              setSelectedGroup(group);
                               return;
                             }
                             router.push(`/chat/${group.name}`);
                           }}
                         >
-                          <Avatar className="h-10 w-10 transition-all">
-                            <AvatarFallback>
-                              {group.display_name[0].toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div 
-                            className={cn(
-                              "ml-3 transition-all duration-300 min-w-0 text-left flex items-center gap-1.5",
-                              (isGroupsExpanded || isGroupMenuOpen) ? "opacity-100 flex-1" : "opacity-0 w-0"
-                            )}
-                          >
-                            <span className="truncate">{group.display_name}</span>
-                            {group.role !== 'none' && group.role !== 'member' && (
-                              <span className="text-xs text-muted-foreground shrink-0">
-                                ({group.role})
-                              </span>
-                            )}
-                            {group.visibility === 'private' && (
-                              <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
-                            )}
+                          <div className="flex items-center">
+                            <Avatar className="h-10 w-10 transition-all">
+                              <AvatarFallback>
+                                {group.display_name[0].toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div 
+                              className={cn(
+                                "ml-3 transition-all duration-300 min-w-0 text-left flex items-center gap-1.5",
+                                (isGroupsExpanded || isGroupMenuOpen) ? "opacity-100 flex-1" : "opacity-0 w-0"
+                              )}
+                            >
+                              <span className="truncate">{group.display_name}</span>
+                              {group.role !== 'none' && group.role !== 'member' && (
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  ({group.role})
+                                </span>
+                              )}
+                              {group.role === 'none' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="ml-auto"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowJoinDialog(true);
+                                    setSelectedGroup(group);
+                                  }}
+                                >
+                                  Join
+                                </Button>
+                              )}
+                              {group.visibility === 'private' && (
+                                <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                              )}
+                            </div>
                           </div>
-                        </Button>
+                        </div>
                       </div>
                     </GroupActions>
                   </div>
@@ -505,6 +525,12 @@ export const Sidebar = ({
         onGroupCreated={() => {
           router.refresh();
         }}
+      />
+
+      <JoinGroupDialog
+        group={selectedGroup}
+        open={showJoinDialog}
+        onOpenChange={setShowJoinDialog}
       />
     </div>
   );

@@ -41,6 +41,7 @@ type MessageType = Database['public']['Tables']['messages']['Row'] & {
     is_bot?: boolean;
     bot_number?: number;
     is_summary?: boolean;
+    bot_type?: string;
   };
 };
 
@@ -403,6 +404,11 @@ export function Message({ message, isBeingRepliedTo, onScrollToMessage, onReply,
                 {message.metadata?.is_summary && (
                   <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                     Summary
+                  </span>
+                )}
+                {message.metadata?.bot_type === 'system' && (
+                  <span className="text-xs bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">
+                    System
                   </span>
                 )}
                 {threadSize > 0 && (

@@ -374,7 +374,7 @@ export function ChatInterface({
               type: 'text',
               metadata: {
                 is_bot: true,
-                is_system: true,
+                bot_type: 'system',
                 is_command_response: true,
                 sender_name: 'System'
               }
@@ -410,7 +410,7 @@ export function ChatInterface({
               type: 'text',
               metadata: {
                 is_bot: true,
-                is_system: true,
+                bot_type: 'system',
                 is_command_response: true,
                 sender_name: 'System'
               }
@@ -442,7 +442,7 @@ export function ChatInterface({
               type: 'text',
               metadata: {
                 is_bot: true,
-                is_system: true,
+                bot_type: 'system',
                 is_command_response: true,
                 sender_name: 'System'
               }
