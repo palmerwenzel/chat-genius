@@ -62,8 +62,6 @@ export function ChannelList({ groupName, channels, onCreateChannel }: ChannelLis
                 <ChannelActions
                   key={channel.id}
                   channelId={channel.id}
-                  name={channel.name}
-                  topic={channel.topic}
                   isPrivate={channel.visibility === 'private'}
                 >
                   <div className="relative" onContextMenu={(e) => {

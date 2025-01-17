@@ -31,7 +31,7 @@ interface SummaryRequest {
 }
 
 // Add constant for system bot ID
-const SYSTEM_BOT_ID = process.env.SYSTEM_BOT_ID || '00000000-0000-0000-0000-000000000000';  // System Bot
+const SYSTEM_BOT_ID = '00000000-0000-0000-0000-000000000000';  // System Bot
 
 export async function POST(request: Request) {
   try {

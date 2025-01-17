@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Plus, Send, Image, FileText, Reply, X, Bot } from "lucide-react";
 import { FileUpload } from "./FileUpload";
 import { presenceService } from '@/services/presence';
-import { Command, CommandList, CommandItem, CommandInput } from "@/components/ui/command";
+import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 
 interface MessageInputProps {
   onSend?: (content: string, type: 'text' | 'code', attachments?: File[], replyTo?: { id: string; content: string; author: string }) => void;
@@ -290,18 +290,26 @@ export const MessageInput = React.forwardRef<{ focus: () => void }, MessageInput
         {showCommands && (
           <Command 
             className="absolute bottom-[100%] translate-y-[0px] mb-1 w-[400px] z-50 border shadow-md bg-popover rounded-md overflow-hidden h-[300px]"
-            shouldFilter={true}
-            loop={true}
+            value=""
+            loop
+            shouldFilter
+            onValueChange={(value: string) => {
+              if (value === 'escape') {
+                setShowCommands(false);
+                requestAnimationFrame(() => {
+                  textareaRef.current?.focus();
+                });
+              }
+            }}
           >
             <CommandInput 
               placeholder="Search commands..."
               className="border-0"
-              autoFocus={true}
-              onKeyDown={(e: React.KeyboardEvent) => {
+              autoFocus
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === 'Escape') {
                   e.preventDefault();
                   setShowCommands(false);
-                  // Focus back on textarea after closing command menu
                   requestAnimationFrame(() => {
                     textareaRef.current?.focus();
                   });

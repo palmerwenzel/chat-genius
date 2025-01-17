@@ -91,10 +91,6 @@ function parseBotCommand(content: string): ParsedCommand | null {
 
 const supabase = createClientComponentClient<Database>();
 
-const BOT_1_ID = process.env.BOT_USER_1_ID || '00000000-0000-0000-0000-000000000b01';
-const BOT_2_ID = process.env.BOT_USER_2_ID || '00000000-0000-0000-0000-000000000b02';
-const SYSTEM_BOT_ID = process.env.SYSTEM_BOT_ID || '00000000-0000-0000-0000-000000000000';
-
 export function ChatInterface({
   title,
   subtitle,
@@ -201,8 +197,8 @@ export function ChatInterface({
           for (const message of messages) {
             const botNumber = message.metadata.bot_number;
             const botUserId = botNumber === 1 
-              ? BOT_1_ID  // Bot 1
-              : BOT_2_ID; // Bot 2
+              ? '00000000-0000-0000-0000-000000000b01'  // Bot 1
+              : '00000000-0000-0000-0000-000000000b02'; // Bot 2
 
             await supabase
               .from('messages')
@@ -274,7 +270,7 @@ export function ChatInterface({
                 channel_id: channelId,
                 content: data.summary,
                 type: 'text',
-                sender_id: SYSTEM_BOT_ID, // System Bot for system messages
+                sender_id: '00000000-0000-0000-0000-000000000000', // System Bot for system messages
                 metadata: {
                   is_bot: true,
                   bot_type: 'system',
@@ -374,7 +370,7 @@ export function ChatInterface({
             .insert({
               channel_id: channelId,
               content: `Current personas:\nBot 1: ${data.bot1_persona}\nBot 2: ${data.bot2_persona}`,
-              sender_id: SYSTEM_BOT_ID, // System Bot for system messages
+              sender_id: '00000000-0000-0000-0000-000000000000', // System Bot for system messages
               type: 'text',
               metadata: {
                 is_bot: true,
@@ -410,7 +406,7 @@ export function ChatInterface({
             .insert({
               channel_id: channelId,
               content: `Personas updated:\nBot 1: ${botCommand.bot1_persona}\nBot 2: ${botCommand.bot2_persona}\n\nNote: Use @bot reset-index to clear the message index before starting a new conversation.`,
-              sender_id: SYSTEM_BOT_ID, // System Bot for system messages
+              sender_id: '00000000-0000-0000-0000-000000000000', // System Bot for system messages
               type: 'text',
               metadata: {
                 is_bot: true,
@@ -442,7 +438,7 @@ export function ChatInterface({
             .insert({
               channel_id: channelId,
               content: 'Message index has been reset. You can now start a new conversation with different personas.',
-              sender_id: SYSTEM_BOT_ID, // System Bot for system messages
+              sender_id: '00000000-0000-0000-0000-000000000000', // System Bot for system messages
               type: 'text',
               metadata: {
                 is_bot: true,

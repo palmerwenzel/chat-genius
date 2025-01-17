@@ -6,7 +6,7 @@ import { MessageActions } from '@/components/messages/MessageActions';
 import { LinkPreview } from '@/components/messages/LinkPreview';
 import { EmojiReactions } from '@/components/messages/EmojiReactions';
 import { ParentMessagePreview } from '@/components/messages/ParentMessagePreview';
-import { Reply, Bot } from 'lucide-react';
+import { Reply } from 'lucide-react';
 import { Database } from '@/types/supabase';
 import { useAuth } from '@/stores/auth';
 import { useEffect, useState, useCallback } from 'react';
