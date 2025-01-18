@@ -10,19 +10,24 @@ interface MessageMetadata {
   [key: string]: string | number | boolean | undefined;
 }
 
-interface RAGMessage {
+interface Message {
   role: string;
   content: string;
   metadata: MessageMetadata;
-  channel_id?: string;
-  group_id?: string;
-  sender_id?: string;
-  created_at?: string;
+}
+
+interface IndexMessagesRequest {
+  messages: Message[];
+}
+
+interface IndexMessagesResponse {
+  status: string;
+  message: string;
 }
 
 export async function POST(request: Request) {
   try {
-    const { messages } = await request.json() as { messages: RAGMessage[] };
+    const { messages } = await request.json() as IndexMessagesRequest;
     
     if (!messages || !Array.isArray(messages)) {
       console.error('No messages provided or invalid messages format');
@@ -56,8 +61,8 @@ export async function POST(request: Request) {
       throw new Error(errorData.detail || 'Failed to index messages');
     }
 
-    const data = await response.json();
-    console.log('Messages indexed successfully');
+    const data = await response.json() as IndexMessagesResponse;
+    console.log('Messages indexed successfully:', data.message);
     
     return NextResponse.json(data);
   } catch (error) {

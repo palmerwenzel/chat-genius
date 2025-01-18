@@ -25,26 +25,20 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { personas } = await request.json();
+    const { bot_id, persona } = await request.json();
 
-    if (!personas || typeof personas !== 'object') {
+    if (!bot_id || !persona || typeof bot_id !== 'string' || typeof persona !== 'string') {
       return NextResponse.json(
-        { error: 'Personas object is required' },
+        { error: 'bot_id and persona are required and must be strings' },
         { status: 400 }
       );
     }
 
-    // Validate persona format
-    const validPersonaKeys = Object.keys(personas).every(key => 
-      key.match(/^bot\d+_persona$/) && 
-      typeof personas[key] === 'string' &&
-      parseInt(key.match(/\d+/)?.[0] || '0') >= 1 &&
-      parseInt(key.match(/\d+/)?.[0] || '0') <= 10
-    );
-
-    if (!validPersonaKeys) {
+    // Validate UUID format
+    const uuidPattern = /^00000000-0000-0000-0000-000000000b\d{2}$/;
+    if (!uuidPattern.test(bot_id)) {
       return NextResponse.json(
-        { error: 'Invalid persona format. Each key should be botN_persona where N is 1-10' },
+        { error: 'Invalid bot_id format. Must be a valid bot UUID' },
         { status: 400 }
       );
     }
@@ -55,19 +49,19 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.NEXT_PUBLIC_RAG_SERVICE_API_KEY}`,
       },
-      body: JSON.stringify({ personas }),
+      body: JSON.stringify({ bot_id, persona }),
     });
 
     if (!response.ok) {
-      throw new Error('Failed to update bot personas');
+      throw new Error('Failed to update bot persona');
     }
 
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error updating bot personas:', error);
+    console.error('Error updating bot persona:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to update bot personas' },
+      { error: error instanceof Error ? error.message : 'Failed to update bot persona' },
       { status: 500 }
     );
   }

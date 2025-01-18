@@ -10,7 +10,7 @@ interface Props {
 
 export default async function GroupPage({ params }: Props) {
   // Await the params at the start
-  const groupId = await params.groupId;
+  const groupId = params.groupId;
   const supabase = await createServerSupabase();
 
   const {

@@ -7,6 +7,10 @@ interface SeedRequest {
   channelId: string;
 }
 
+function getBotUUID(botNumber: number): string {
+  return `00000000-0000-0000-0000-000000000b${botNumber.toString().padStart(2, '0')}`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -19,7 +23,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate bot numbers if provided
+    // Validate bot numbers and convert to UUIDs if provided
+    let bot_ids: string[] | undefined;
     if (bots) {
       const validBots = bots.every(bot => 
         typeof bot === 'number' && bot >= 1 && bot <= 10
@@ -30,12 +35,13 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+      bot_ids = bots.map(getBotUUID);
     }
 
     console.log('Seeding conversation:', {
       prompt,
       num_turns,
-      bots: bots || 'default',
+      bot_ids: bot_ids || 'default',
       channelId
     });
 
@@ -45,7 +51,11 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.NEXT_PUBLIC_RAG_SERVICE_API_KEY}`,
       },
-      body: JSON.stringify({ prompt, num_turns, bots, channelId }),
+      body: JSON.stringify({ 
+        prompt, 
+        num_turns, 
+        bot_ids,
+      }),
     });
 
     if (!response.ok) {
@@ -59,7 +69,9 @@ export async function POST(request: Request) {
     }
 
     const data = await response.json();
-    console.log('Conversation seeded successfully:', data);
+    console.log('Seed response:', data);
+
+    // Return the messages directly
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error seeding conversation:', error);

@@ -22,8 +22,8 @@ export async function handleBotCommand(
         await handlePersonasCommand(context);
         break;
 
-      case 'set-personas':
-        await handleSetPersonasCommand(command, context);
+      case 'set-persona':
+        await handleSetPersonaCommand(command, context);
         break;
 
       case 'reset-index':
@@ -56,43 +56,72 @@ export async function handleBotCommand(
 }
 
 async function handleSeedCommand(command: Extract<BotCommand, { command: 'seed' }>, context: CommandContext) {
-  const response = await fetch('/api/ai/seed', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt: command.prompt,
-      num_turns: command.num_turns || 3,
-      bots: command.bots,
-      channelId: context.channelId
-    })
-  });
+  // Show initial loading message
+  await insertSystemMessage(context,
+    "🤖 Generating conversation...\n" +
+    "This might take a minute as the bots think about their responses.",
+    { is_loading: true }
+  );
 
-  if (!response.ok) {
-    throw new Error('Failed to seed conversation');
-  }
+  try {
+    const response = await fetch('/api/ai/seed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: command.prompt,
+        num_turns: command.num_turns || 3,
+        bots: command.bots,
+        channelId: context.channelId
+      })
+    });
 
-  const { messages } = await response.json();
-  
-  // Add seeded messages to the chat
-  for (const message of messages) {
-    const botNumber = message.metadata.bot_number;
-    const botUserId = getBotUserId(botNumber);
+    if (!response.ok) {
+      throw new Error('Failed to seed conversation');
+    }
 
+    const data = await response.json();
+    
+    // Remove loading message before inserting conversation
     await context.supabase
       .from('messages')
-      .insert({
-        channel_id: context.channelId,
-        content: message.content,
-        sender_id: botUserId,
-        type: 'text',
-        metadata: {
-          ...message.metadata,
-          is_bot: true,
-          is_command_response: true,
-          bot_number: botNumber,
-          sender_name: message.metadata.bot_name || `Bot ${botNumber}`
-        }
-      });
+      .delete()
+      .eq('channel_id', context.channelId)
+      .eq('metadata->is_loading', true);
+    
+    // Insert each message into Supabase
+    for (const message of data.messages) {
+      const botNumber = parseInt(message.metadata.bot_id?.replace(/.*b(\d+)$/, '$1') || '0');
+      const botUserId = getBotUserId(botNumber);
+
+      await context.supabase
+        .from('messages')
+        .insert({
+          channel_id: context.channelId,
+          content: message.content,
+          sender_id: botUserId,
+          type: 'text',
+          metadata: {
+            ...message.metadata,
+            is_bot: true,
+            is_command_response: true,
+            bot_number: botNumber,
+            sender_name: message.metadata.bot_name || `Bot ${botNumber}`
+          }
+        });
+    }
+
+    context.toast({
+      description: 'Conversation seeded successfully'
+    });
+  } catch (error) {
+    // Remove loading message on error
+    await context.supabase
+      .from('messages')
+      .delete()
+      .eq('channel_id', context.channelId)
+      .eq('metadata->is_loading', true);
+    
+    throw error;
   }
 }
 
@@ -165,21 +194,41 @@ async function handleIndexCommand(context: CommandContext) {
       }
     }));
 
-  const response = await fetch('/api/ai/index', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: ragMessages })
-  });
+  console.log('Indexing messages:', ragMessages);
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.error || 'Failed to index messages');
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+  try {
+    const response = await fetch('/api/ai/index', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: ragMessages }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || 'Failed to index messages');
+    }
+
+    const data = await response.json();
+    console.log('Index response:', data);
+
+    context.toast({
+      title: 'Messages Indexed',
+      description: `Successfully indexed ${messages.length} messages for RAG functionality.`
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Indexing operation timed out after 60 seconds. The operation may still complete in the background.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  context.toast({
-    title: 'Messages Indexed',
-    description: `Successfully indexed ${messages.length} messages for RAG functionality.`
-  });
 }
 
 async function handlePersonasCommand(context: CommandContext) {
@@ -194,15 +243,15 @@ async function handlePersonasCommand(context: CommandContext) {
   }
 
   const data = await response.json();
-  
-  // Handle both old and new response formats
   const personas = data.personas || {};
-  const enabledBots = data.enabled_bots || [];
   
-  // Convert personas object to array of strings
+  // Format each persona with its details
   const personasList = Object.entries(personas)
-    .map(([botId, persona]) => `Bot ${botId}: ${persona}`)
-    .join('\n');
+    .map(([botId, info]) => {
+      const { name, role, persona } = info as { name: string; role: string; persona: string };
+      return `Bot ${botId.replace('bot', '').replace('_persona', '')}:\n  Name: ${name}\n  Role: ${role}\n  Description: ${persona.split('\n')[0]}`; // Only show first line of description
+    })
+    .join('\n\n');
 
   if (!personasList) {
     await insertSystemMessage(context, 'No personas are currently set.');
@@ -210,8 +259,7 @@ async function handlePersonasCommand(context: CommandContext) {
   }
 
   await insertSystemMessage(context, 
-    `Current personas:\n${personasList}\n\n` +
-    `Enabled bots: ${enabledBots.length ? enabledBots.join(', ') : 'None'}`
+    `Current personas:\n\`\`\`\n${personasList}\n\`\`\`\n\n`
   );
 
   context.toast({
@@ -220,44 +268,35 @@ async function handlePersonasCommand(context: CommandContext) {
   });
 }
 
-async function handleSetPersonasCommand(
-  command: Extract<BotCommand, { command: 'set-personas' }>,
+async function handleSetPersonaCommand(
+  command: Extract<BotCommand, { command: 'set-persona' }>,
   context: CommandContext
 ) {
-  if (!command.personas.length) {
-    throw new Error('At least one bot persona must be specified');
-  }
-
-  // Convert personas array to the expected format with botN_persona keys
-  const personasObject = command.personas.reduce((acc, { botId, persona }) => ({
-    ...acc,
-    [`bot${botId}_persona`]: persona
-  }), {});
+  // Convert bot number to UUID format
+  const uuid_bot_id = `00000000-0000-0000-0000-000000000b${command.botId.toString().padStart(2, '0')}`;
 
   const response = await fetch('/api/ai/personas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ personas: personasObject })
+    body: JSON.stringify({
+      bot_id: uuid_bot_id,
+      persona: command.persona
+    })
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.error || 'Failed to update bot personas');
+    throw new Error(errorData?.error || 'Failed to update bot persona');
   }
 
-  // Format the updated personas for display
-  const personasList = command.personas
-    .map(({ botId, persona }) => `Bot ${botId}: ${persona}`)
-    .join('\n');
-
   await insertSystemMessage(context,
-    `Personas updated:\n${personasList}\n\n` +
-    'Note: Use @bot reset-index to clear the message index before starting a new conversation.'
+    `Bot ${command.botId} persona updated to: ${command.persona}\n\n` +
+    'Note: Use /bot reset-index to clear the message index before starting a new conversation.'
   );
 
   context.toast({
-    title: 'Personas Updated',
-    description: 'The bot personas have been updated. Remember to reset the index.'
+    title: 'Persona Updated',
+    description: 'The bot persona has been updated. Remember to reset the index.'
   });
 }
 
@@ -295,15 +334,17 @@ async function handleListBotsCommand(context: CommandContext) {
 
   const data = await response.json();
   const botList = Object.entries(data.personas)
-    .map(([botId, persona]) => {
-      const isEnabled = data.enabled_bots.includes(parseInt(botId));
-      return `Bot ${botId}${isEnabled ? ' (Enabled)' : ' (Disabled)'}: ${persona}`;
+    .map(([botId, info]) => {
+      const { name, role } = info as { name: string; role: string };
+      const botNumber = botId.replace('bot', '').replace('_persona', '');
+      const isEnabled = data.enabled_bots?.includes(parseInt(botNumber));
+      return `Bot ${botNumber}${isEnabled ? ' (Enabled)' : ' (Disabled)'}: ${name} - ${role}`;
     })
     .join('\n');
 
   await insertSystemMessage(context,
     `Available Bots:\n${botList}\n\n` +
-    'Use @bot enable-bot <number> or @bot disable-bot <number> to manage bots.'
+    'Use /bot enable-bot <number> or /bot disable-bot <number> to manage bots.'
   );
 
   context.toast({

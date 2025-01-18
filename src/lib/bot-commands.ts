@@ -10,49 +10,49 @@ export interface CommandMetadata {
 
 export const BOT_COMMAND_METADATA: Record<string, CommandMetadata> = {
   'seed': {
-    command: '@bot seed',
+    command: '/bot seed',
     description: 'Triggers conversation between AI chatbots using current personas',
-    usage: '@bot seed "your conversation prompt" [--turns N] [--bots 1,2,3]'
+    usage: '/bot seed "your conversation prompt" [--turns N] [--bots 1,2,3]'
   },
   'summary': {
-    command: '@bot summary',
+    command: '/bot summary',
     description: 'Generates channel summary using RAG with semantic search',
-    usage: '@bot summary "optional focus query"'
+    usage: '/bot summary "optional focus query"'
   },
   'personas': {
-    command: '@bot personas',
+    command: '/bot personas',
     description: 'View current personas and enabled status of all bots',
-    usage: '@bot personas'
+    usage: '/bot personas'
   },
-  'set-personas': {
-    command: '@bot set-personas',
-    description: 'Set custom personas for one or more bots',
-    usage: '@bot set-personas --bot1 "persona 1" --bot2 "persona 2" ... --bot10 "persona 10"'
+  'set-persona': {
+    command: '/bot set-persona',
+    description: 'Set a custom persona for any bot',
+    usage: '/bot set-persona --bot1 "persona"'
   },
   'list-bots': {
-    command: '@bot list-bots',
+    command: '/bot list-bots',
     description: 'List all available bots with their roles and enabled status',
-    usage: '@bot list-bots'
+    usage: '/bot list-bots'
   },
   'enable-bot': {
-    command: '@bot enable-bot',
+    command: '/bot enable-bot',
     description: 'Enable a specific bot to participate in conversations',
-    usage: '@bot enable-bot <number>'
+    usage: '/bot enable-bot <number>'
   },
   'disable-bot': {
-    command: '@bot disable-bot',
+    command: '/bot disable-bot',
     description: 'Disable a specific bot from participating in conversations',
-    usage: '@bot disable-bot <number>'
+    usage: '/bot disable-bot <number>'
   },
   'reset-index': {
-    command: '@bot reset-index',
+    command: '/bot reset-index',
     description: 'Reset the RAG vector store (required after changing personas)',
-    usage: '@bot reset-index'
+    usage: '/bot reset-index'
   },
   'index': {
-    command: '@bot index',
+    command: '/bot index',
     description: 'Index channel messages in vector store for RAG functionality',
-    usage: '@bot index'
+    usage: '/bot index'
   }
 };
 
@@ -69,12 +69,10 @@ export interface SeedCommand extends BaseBotCommand {
   bots?: number[]; // Optional array of bot numbers to participate
 }
 
-export interface SetPersonasCommand extends BaseBotCommand {
-  command: 'set-personas';
-  personas: {
-    botId: number;
-    persona: string;
-  }[];
+export interface SetPersonaCommand extends BaseBotCommand {
+  command: 'set-persona';
+  botId: number;
+  persona: string;
 }
 
 export interface SummaryCommand extends BaseBotCommand {
@@ -110,7 +108,7 @@ export interface DisableBotCommand extends BaseBotCommand {
 
 export type BotCommand = 
   | SeedCommand 
-  | SetPersonasCommand 
+  | SetPersonaCommand 
   | SummaryCommand 
   | IndexCommand 
   | PersonasCommand 
@@ -122,59 +120,33 @@ export type BotCommand =
 // Helper function to parse bot commands
 export function parseBotCommand(content: string): BotCommand | null {
   const trimmed = content.trim();
-  if (!trimmed.startsWith('@bot')) return null;
+  if (!trimmed.startsWith('/bot')) return null;
 
   const parts = trimmed.split(' ');
   if (parts.length < 2) return null;
 
   const command = parts[1];
   
-  // Handle set-personas command with multiple bots
-  if (command === 'set-personas') {
-    const personas: { botId: number; persona: string; }[] = [];
-    let currentBotId: number | null = null;
-    let currentPersona: string[] = [];
-
-    // Parse each part after the command
-    for (let i = 2; i < parts.length; i++) {
-      const part = parts[i];
-      
-      // Check for bot number flag
-      if (part.startsWith('--bot')) {
-        // Save previous bot's persona if exists
-        if (currentBotId !== null && currentPersona.length > 0) {
-          personas.push({
-            botId: currentBotId,
-            persona: currentPersona.join(' ').replace(/^["']|["']$/g, '')
-          });
-          currentPersona = [];
-        }
-        
-        // Get new bot number
-        const botNumber = parseInt(part.slice(5));
-        if (isNaN(botNumber) || botNumber < 1 || botNumber > 10) {
-          throw new Error('Invalid bot number. Must be between 1 and 10.');
-        }
-        currentBotId = botNumber;
-      } else if (currentBotId !== null) {
-        // Add to current persona
-        currentPersona.push(part);
-      }
+  // Handle set-persona command
+  if (command === 'set-persona') {
+    const parts = trimmed.split(' ');
+    const botFlag = parts[2];
+    
+    if (!botFlag?.startsWith('--bot')) {
+      throw new Error('Bot number must be specified using --botN flag');
+    }
+    
+    const botNumber = parseInt(botFlag.slice(5));
+    if (isNaN(botNumber) || botNumber < 1 || botNumber > 10) {
+      throw new Error('Invalid bot number. Must be between 1 and 10.');
+    }
+    
+    const persona = parts.slice(3).join(' ').replace(/^["']|["']$/g, '');
+    if (!persona) {
+      throw new Error('Persona must be specified');
     }
 
-    // Add the last bot's persona
-    if (currentBotId !== null && currentPersona.length > 0) {
-      personas.push({
-        botId: currentBotId,
-        persona: currentPersona.join(' ').replace(/^["']|["']$/g, '')
-      });
-    }
-
-    if (personas.length === 0) {
-      throw new Error('At least one bot persona must be specified using --botN flag');
-    }
-
-    return { command: 'set-personas', personas };
+    return { command: 'set-persona', botId: botNumber, persona };
   }
 
   // Handle personas command
